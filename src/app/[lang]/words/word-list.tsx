@@ -2,8 +2,10 @@
 
 import { useDeferredValue, useMemo, useState } from 'react'
 
-import { ErrorMessage, LoadingMessage, WordRow } from '@/components/word-row'
+import { ErrorMessage, LoadingMessage, WordRow, type WordRowText } from '@/components/word-row'
 import type { PartOfSpeech } from '@/db/schema'
+import { format } from '@/i18n/config'
+import type { Dictionary } from '@/i18n/dictionaries/ko'
 import {
   DICTIONARY_PATH,
   hasKorean,
@@ -15,13 +17,13 @@ import { useDictionary } from '@/lib/use-dictionary'
 
 const PAGE_SIZE = 50
 
-/** 품사 필터. 화면용으로 18개 품사를 다섯 묶음으로 줄였다. 어디에도 안 걸리면 '기타'다. */
+/** 품사 필터. 화면용으로 18개 품사를 다섯 묶음으로 줄였다. 어디에도 안 걸리면 '기타'다. 이름은 화면 언어 사전에 있다. */
 const POS_GROUPS = [
-  { key: 'noun', label: '명사', pos: ['noun', 'pronoun'] },
-  { key: 'verb', label: '동사', pos: ['verb_godan', 'verb_ichidan', 'verb_irregular'] },
-  { key: 'adj', label: '형용사', pos: ['adj_i', 'adj_na'] },
-  { key: 'adverb', label: '부사', pos: ['adverb'] },
-] as const satisfies ReadonlyArray<{ key: string; label: string; pos: readonly PartOfSpeech[] }>
+  { key: 'noun', pos: ['noun', 'pronoun'] },
+  { key: 'verb', pos: ['verb_godan', 'verb_ichidan', 'verb_irregular'] },
+  { key: 'adj', pos: ['adj_i', 'adj_na'] },
+  { key: 'adverb', pos: ['adverb'] },
+] as const satisfies ReadonlyArray<{ key: string; pos: readonly PartOfSpeech[] }>
 
 type PosFilter = 'all' | 'other' | (typeof POS_GROUPS)[number]['key']
 
@@ -78,8 +80,12 @@ function search(words: IndexedWord[], rawQuery: string, posFilter: PosFilter): I
   return [...hits.filter(isExact), ...hits.filter((w) => !isExact(w))]
 }
 
-const MISSING_HINT =
-  'public/data/words.json 이 없습니다. npm run data:export (DB) 또는 npm run data:local 을 먼저 실행하세요.'
+export type WordListText = {
+  row: WordRowText
+  words: Dictionary['words']
+  loading: string
+  errors: { missing: string; loadFailed: string }
+}
 
 type Loaded = { data: DictionaryFile; words: IndexedWord[]; koWords: number }
 
@@ -87,8 +93,8 @@ function prepare(data: DictionaryFile): Loaded {
   return { data, words: data.words.map(indexWord), koWords: data.words.filter(hasKorean).length }
 }
 
-export default function WordList() {
-  const loaded = useDictionary(DICTIONARY_PATH, MISSING_HINT, prepare)
+export default function WordList({ text }: { text: WordListText }) {
+  const loaded = useDictionary(DICTIONARY_PATH, text.errors, prepare)
   const [query, setQuery] = useState('')
   const [posFilter, setPosFilter] = useState<PosFilter>('all')
   const [visible, setVisible] = useState(PAGE_SIZE)
@@ -101,30 +107,33 @@ export default function WordList() {
     [loaded, deferredQuery, posFilter],
   )
 
-  if (loaded.status === 'loading') return <LoadingMessage />
+  if (loaded.status === 'loading') return <LoadingMessage text={text.loading} />
   if (loaded.status === 'error') return <ErrorMessage message={loaded.message} />
 
   const state = loaded.value
+  const t = text.words
+  const locale = text.row.locale
+  const num = (n: number) => n.toLocaleString(locale)
+  // 한국어 화면에서만 번역 범위를 알린다. 영어 뜻은 모든 단어에 있다.
+  const showsKorean = text.row.meaningLanguages[0] === 'ko'
 
   const filters: Array<{ key: PosFilter; label: string }> = [
-    { key: 'all', label: '전체' },
-    ...POS_GROUPS.map((g) => ({ key: g.key, label: g.label })),
-    { key: 'other', label: '기타' },
+    { key: 'all', label: t.filters.all },
+    ...POS_GROUPS.map((g) => ({ key: g.key, label: t.filters[g.key] })),
+    { key: 'other', label: t.filters.other },
   ]
 
   return (
     <section>
-      {state.koWords < state.words.length && (
+      {showsKorean && state.koWords < state.words.length && (
         <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          {state.koWords === 0
-            ? '한국어 뜻은 아직 생성 전이라 JMdict의 영어 뜻을 보여줍니다.'
-            : `한국어 뜻은 ${state.koWords.toLocaleString()}개 단어에만 있습니다. 나머지는 영어 뜻을 보여줍니다.`}
+          {state.koWords === 0 ? t.noKorean : format(t.partialKorean, { n: num(state.koWords) })}
         </p>
       )}
 
       <div className="sticky top-0 z-10 -mx-4 bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <label htmlFor="word-search" className="sr-only">
-          단어 검색
+          {t.searchLabel}
         </label>
         <input
           id="word-search"
@@ -134,7 +143,7 @@ export default function WordList() {
             setQuery(e.target.value)
             setVisible(PAGE_SIZE)
           }}
-          placeholder="일본어, 읽기, 뜻(한국어·영어)으로 검색"
+          placeholder={t.searchPlaceholder}
           autoComplete="off"
           className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
         />
@@ -157,16 +166,16 @@ export default function WordList() {
       </div>
 
       <p className="mt-4 mb-2 text-sm text-zinc-500">
-        {results.length.toLocaleString()}개 단어
-        {results.length !== state.words.length && ` / 전체 ${state.words.length.toLocaleString()}개`}
+        {format(t.count, { n: num(results.length) })}
+        {results.length !== state.words.length && format(t.ofTotal, { total: num(state.words.length) })}
       </p>
 
       {results.length === 0 ? (
-        <p className="py-16 text-center text-zinc-500">찾는 단어가 없습니다.</p>
+        <p className="py-16 text-center text-zinc-500">{t.notFound}</p>
       ) : (
         <ol className="divide-y divide-zinc-200 dark:divide-zinc-800">
           {results.slice(0, visible).map((w) => (
-            <WordRow key={w.id} word={w} order={w.order} />
+            <WordRow key={w.id} word={w} order={w.order} text={text.row} />
           ))}
         </ol>
       )}
@@ -177,7 +186,7 @@ export default function WordList() {
           onClick={() => setVisible((v) => v + PAGE_SIZE)}
           className="mt-6 w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          더 보기 ({Math.min(visible, results.length).toLocaleString()} / {results.length.toLocaleString()})
+          {format(t.more, { shown: num(Math.min(visible, results.length)), total: num(results.length) })}
         </button>
       )}
 

@@ -53,10 +53,28 @@ docker exec -it niben-db createdb -U postgres niben
 | `npm run data:usage` | jiten.moe 빈도 목록에서 실사용 빈도 순위(`usage_rank`, 학습 순서 1차 기준) 채우기 |
 | `npm run translate` | 한국어 뜻 생성 (Gemini API) |
 | `npm run data:local` | DB 없이 로컬 JMdict에서 앱용 `public/data/words.json` 생성 |
-| `npm run data:export` | DB에서 앱용 `public/data/words.json`(전체)과 `words-ko.json`(한국어 뜻이 있는 단어만) 생성 |
+| `npm run data:export` | DB에서 앱용 `public/data/words.json`(전체)과 `study.json`(학습 순서 상위 2,000단어) 생성 |
 
-화면은 두 개다. 메인(`/`)은 `words-ko.json`에서 단어 50개를 무작위로 뽑아 보여 주고("다시 뽑기"로 새로 뽑는다),
-전체 단어 탭(`/words`)은 `words.json` 전체를 검색·품사별로 거른다.
+화면은 두 개다. 메인(`/ko`)은 `study.json`에서 화면 언어의 뜻이 있는 단어 50개를 무작위로 뽑아 보여 주고
+("다시 뽑기"로 새로 뽑는다), 전체 단어 탭(`/ko/words`)은 `words.json` 전체를 검색·품사별로 거른다.
+
+### 다국어
+
+화면은 한국어·영어로 볼 수 있고, 주소로 나뉜다(`/ko`, `/en`). 오른쪽 위 메뉴로 바꾼다.
+언어 없는 주소(`/`, `/words`)로 들어오면 [src/proxy.ts](src/proxy.ts)가 언어 주소로 보낸다.
+고른 언어(쿠키 `NEXT_LOCALE`) → 브라우저 언어(`Accept-Language`) → 한국어 순으로 정한다.
+
+| 화면 | 문구 | 뜻 |
+| --- | --- | --- |
+| `/ko` | 한국어 | 한국어 (번역 안 된 뜻만 영어) |
+| `/en` | 영어 | 영어 |
+
+뜻마다 한 언어로만 보여준다. 검색은 화면에 안 보이는 영어 뜻으로도 된다(`eat` → 食べる).
+
+- 언어 목록과 화면별 뜻 언어: [src/i18n/config.ts](src/i18n/config.ts)
+- 화면 문구: [src/i18n/dictionaries/](src/i18n/dictionaries/) — `ko.ts`가 기준 모양이고 다른 언어는 같은 모양이어야 한다(타입 검사가 잡는다).
+  서버에서만 읽고, 페이지가 필요한 문구를 클라이언트 컴포넌트에 넘긴다.
+- 언어를 늘리려면 `LOCALES`·`LOCALE_NAMES`·`MEANING_LANGUAGES`에 추가하고 사전 파일을 하나 더 만든다.
 한 글자 히라가나 표제어(`の`, `は`, `を` …)의 뜻 중 한국어로 조사·어미에 해당하는 것(~의, ~은/는, ~을/를 …)은
 두 화면 모두에서 뺀다. 단어장에서 따로 익힐 말이 아니어서다. 단어로서의 뜻(`ね` = 저기, `で` = 그래서)은 남기고,
 남는 뜻이 없으면 단어가 빠진다. DB에는 그대로 있고 앱용 JSON을 만들 때만 거른다([scripts/lib/app-filter.ts](scripts/lib/app-filter.ts)).
@@ -72,7 +90,7 @@ npm run dev
 
 표제어 선택·병합·빈도 환산은 `data:import`·`data:freq`와 같은 코드([scripts/lib/jmdict-source.ts](scripts/lib/jmdict-source.ts))를
 쓰므로 DB에 들어가는 것과 같은 단어가 나온다. 한국어 뜻은 DB에만 생기므로 이 경로의 뜻은 영어다.
-`words-ko.json`도 만들어지지 않으므로 메인 화면(무작위 50단어)은 비고 전체 단어 탭만 쓸 수 있다.
+그래서 한국어 화면의 메인(무작위 50단어)은 비고, 영어 화면(`/en`)에서는 메인과 전체 단어 탭을 모두 쓸 수 있다.
 
 ### 데이터 적재
 
@@ -102,6 +120,9 @@ npm run translate -- --limit 2000           # 학습 순서 상위 2000 표제�
 한국어 뜻이 이미 있는 뜻은 건너뛴다. 중간에 끊겨도 다시 실행하면 이어지고,
 손으로 고친 뜻은 덮이지 않는다. 실행이 끝나면 실제 토큰 사용량과 추정 비용을 출력한다.
 번역한 뒤에는 `npm run data:export`를 다시 돌려야 화면에 반영된다.
+
+현재 상태: 앱에 나오는 22,576단어, 뜻 36,855개에 모두 한국어 뜻이 있다.
+`--dump`로 뽑은 요청을 Claude가 직접 번역해 `--load`로 넣었다. 모두 `source='llm'`, `verified=false`(미검수)다.
 
 `GEMINI_API_KEY`가 필요하다([Google AI Studio](https://aistudio.google.com/apikey)에서 발급, 무료 등급 있음).
 모델은 [src/lib/translation.ts](src/lib/translation.ts)의 `TRANSLATION_MODEL`이다.

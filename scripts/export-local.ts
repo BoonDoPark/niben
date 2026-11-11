@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { DictionaryFile, DictWord } from '../src/lib/dictionary'
+import { STUDY_RANGE, type DictionaryFile, type DictWord } from '../src/lib/dictionary'
 import {
   ensureFreqArchive,
   findDataFile,
@@ -26,6 +26,8 @@ import { assignUsageRanks, ensureUsageFreqCsv, parseUsageFreqCsv } from './lib/u
 
 const OUT_DIR = join(process.cwd(), 'public', 'data')
 const OUT_PATH = join(OUT_DIR, 'words.json')
+/** 메인 화면(무작위 단어)용. data:export 와 같이 학습 순서 상위 STUDY_RANGE 단어만 담는다. */
+const STUDY_OUT_PATH = join(OUT_DIR, 'study.json')
 
 /** 남는 뜻이 없으면 null — 한 글자 조사(の, は, を …)처럼 앱에 싣지 않는 단어다(scripts/lib/app-filter.ts). */
 function toDictWord(entry: PreparedEntry, rank: number | null): DictWord | null {
@@ -92,11 +94,13 @@ async function main() {
   mkdirSync(OUT_DIR, { recursive: true })
   const json = JSON.stringify(out)
   writeFileSync(OUT_PATH, json)
+  writeFileSync(STUDY_OUT_PATH, JSON.stringify({ ...out, words: dictWords.slice(0, STUDY_RANGE) }))
 
   const ranked = dictWords.filter((w) => w.rank !== null).length
   console.log(`\n${OUT_PATH}`)
   console.log(`  ${dictWords.length}개 단어, 순위 있음 ${ranked}개`)
   console.log(`  ${(Buffer.byteLength(json) / 1024 / 1024).toFixed(1)} MB`)
+  console.log(`${STUDY_OUT_PATH} (상위 ${Math.min(STUDY_RANGE, dictWords.length)}단어)`)
 }
 
 main().catch((err) => {

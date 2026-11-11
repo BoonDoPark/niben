@@ -1,7 +1,7 @@
 import type { PartOfSpeech } from '../../src/db/schema'
 
 /**
- * 앱용 JSON(words.json, words-ko.json)에 실을 뜻을 고르는 규칙. DB 데이터는 건드리지 않는다.
+ * 앱용 JSON(words.json, study.json)에 실을 뜻을 고르는 규칙. DB 데이터는 건드리지 않는다.
  *
  * 한 글자 히라가나 표제어(の, は, を, に …)의 뜻 중 한국어로 조사·어미에 해당하는 것
  * (~의, ~은/는, ~이/가, ~(으)로 …)은 단어장에서 따로 익힐 단어가 아니라서 뺀다(사용자 결정, 2026-11-07).

@@ -42,17 +42,22 @@ export type DictMeaning = {
 export const DICTIONARY_PATH = '/data/words.json'
 
 /**
- * 메인 화면의 무작위 단어를 뽑는 범위. 학습 순서 상위 STUDY_RANGE 단어 중 한국어 뜻이 있는 것만 담는다.
- * 전체 파일(수 MB)을 받지 않고 몇십 단어를 보여주기 위해 data:export 가 따로 쓴다.
+ * 메인 화면(무작위 단어)용 파일. 학습 순서 상위 STUDY_RANGE 단어만 담는다.
+ * 전체 파일(수 MB)을 받지 않고 몇십 단어를 보여주기 위해 data:export·data:local 이 따로 쓴다.
+ * 화면 언어에 맞는 뜻이 있는 단어만 골라 뽑는 일은 화면이 한다(언어마다 번역 범위가 다르다).
  *
  * 범위를 두는 이유: 예전 순서(신문 빈도)로 번역해 둔 명사가 상위 밖에 1,500개쯤 남아 있어서,
  * 번역된 단어 전부에서 뽑으면 다시 명사 위주가 된다.
  */
-export const KOREAN_WORDS_PATH = '/data/words-ko.json'
+export const STUDY_WORDS_PATH = '/data/study.json'
 export const STUDY_RANGE = 2000
 
+export function hasMeaningIn(word: DictWord, lang: Language): boolean {
+  return word.senses.some((s) => s.meanings[lang])
+}
+
 export function hasKorean(word: DictWord): boolean {
-  return word.senses.some((s) => s.meanings.ko)
+  return hasMeaningIn(word, 'ko')
 }
 
 const FREQ_LABEL_LIMITS = [500, 1000, 3000, 5000, 10000, 20000] as const
@@ -62,11 +67,14 @@ const FREQ_LABEL_LIMITS = [500, 1000, 3000, 5000, 10000, 20000] as const
  *
  * 순위는 빈도 목록의 표기 단위 순위라(조사·인명 등 사전에 없는 것도 끼어 있다)
  * 정확한 숫자보다 구간으로 보여준다. 2만 위 밖은 표시하지 않는다.
+ *
+ * @param template 화면 언어의 문구. {n}에 구간 끝 순위가 들어간다(예: "빈도 {n}위 안").
+ * @param locale 숫자 표기용 언어 태그
  */
-export function freqLabel(rank: number | null): string | null {
+export function freqLabel(rank: number | null, template: string, locale: string): string | null {
   if (rank === null) return null
   const limit = FREQ_LABEL_LIMITS.find((l) => rank <= l)
-  return limit ? `빈도 ${limit.toLocaleString()}위 안` : null
+  return limit ? template.replace('{n}', limit.toLocaleString(locale)) : null
 }
 
 /**
