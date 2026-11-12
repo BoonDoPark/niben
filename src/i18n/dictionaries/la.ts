@@ -1,0 +1,80 @@
+import type { Dictionary } from './ko'
+
+/** 라틴어 화면 문구. 품사 이름은 일본어 문법 용어(godan, ichidan)를 로마자로 남긴다. */
+const la: Dictionary = {
+  meta: {
+    title: 'niben — Vocabula Iaponica',
+    description: 'Vocabula Iaponica disce eo ordine quo saepissime usurpantur',
+    wordsTitle: 'Omnia vocabula',
+  },
+  header: {
+    tagline: 'Vocabula Iaponica disce eo ordine quo saepissime usurpantur',
+  },
+  nav: {
+    label: 'Conspectum muta',
+    random: 'Quinquaginta fortuita',
+    words: 'Omnia vocabula',
+    language: 'Lingua',
+  },
+  footer: {
+    dictionary: 'Fons lexici',
+    frequency: 'Fons frequentiae',
+    frequencyList: 'index frequentiae omnium generum',
+  },
+  status: {
+    loading: 'Lexicon oneratur…',
+    loadFailed: 'Lexicon onerari non potuit ({status})',
+    missingStudy:
+      'Data vocabulorum (public/data/study.json) desunt. Prius npm run data:export aut npm run data:local exsequere.',
+    missingWords:
+      'Data vocabulorum (public/data/words.json) desunt. Prius npm run data:export aut npm run data:local exsequere.',
+  },
+  random: {
+    summary: '{count} vocabula temere electa ex {total} usitatissimis.',
+    redraw: 'Iterum misce',
+    empty: 'Nulla adhuc vocabula significationes Latinas habent. In "Omnia vocabula" alias linguas inspicere potes.',
+  },
+  words: {
+    searchLabel: 'Vocabula quaere',
+    searchPlaceholder: 'Quaere Iaponice, lectione, significatione',
+    count: '{n} vocabula',
+    ofTotal: ' / {total} in summa',
+    notFound: 'Nulla vocabula congruunt.',
+    more: 'Plura ostende ({shown} / {total})',
+    noKorean: '',
+    partialKorean: '',
+    filters: {
+      all: 'Omnia',
+      noun: 'Nomina',
+      verb: 'Verba',
+      adj: 'Adiectiva',
+      adverb: 'Adverbia',
+      other: 'Cetera',
+    },
+  },
+  word: {
+    freq: 'Inter {n} prima',
+  },
+  pos: {
+    noun: 'nomen',
+    pronoun: 'pronomen',
+    verb_godan: 'verbum godan',
+    verb_ichidan: 'verbum ichidan',
+    verb_irregular: 'verbum irregulare',
+    adj_i: 'adiectivum -i',
+    adj_na: 'adiectivum -na',
+    adverb: 'adverbium',
+    adnominal: 'adnominale',
+    conjunction: 'coniunctio',
+    particle: 'particula',
+    auxiliary: 'verbum auxiliare',
+    interjection: 'interiectio',
+    prefix: 'praefixum',
+    suffix: 'suffixum',
+    counter: 'numerativum',
+    expression: 'locutio',
+    other: 'aliud',
+  },
+}
+
+export default la

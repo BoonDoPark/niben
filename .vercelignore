@@ -1,0 +1,15 @@
+# Vercel CLI(vercel deploy)로 올릴 때 뺄 파일. CLI는 .gitignore 를 보지 않는다.
+# public/data(앱용 사전 JSON)는 git에는 없지만 사이트에 필요하므로 여기서 빼지 않는다.
+
+# 비밀 값 — CLI 기본 제외 목록에 .env 는 없다
+.env
+.env.*
+!.env.example
+
+# 내려받은 원본 사전 데이터(npm run data:fetch). 빌드에 쓰지 않는다
+/data
+
+# 로컬 도구
+/.claude
+/coverage
+*.tsbuildinfo

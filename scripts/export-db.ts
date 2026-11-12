@@ -10,6 +10,7 @@ import { learningOrder } from '../src/db/order'
 import { senses, senseTranslations, words, type Language, type PartOfSpeech } from '../src/db/schema'
 import {
   hasKorean,
+  hasMeaningIn,
   STUDY_RANGE,
   type DictionaryFile,
   type DictMeaning,
@@ -32,7 +33,7 @@ const OUT_DIR = join(process.cwd(), 'public', 'data')
 const OUT_PATH = join(OUT_DIR, 'words.json')
 /** 메인 화면(무작위 단어)용. 학습 순서 상위 STUDY_RANGE 단어만 담는다. 화면 언어별 거르기는 화면이 한다. */
 const STUDY_OUT_PATH = join(OUT_DIR, 'study.json')
-const EXPORTED_LANGS: Language[] = ['ko', 'en']
+const EXPORTED_LANGS: Language[] = ['ko', 'en', 'la']
 
 async function main() {
   console.log('DB에서 읽는 중...')
@@ -125,6 +126,9 @@ async function main() {
   console.log(`\n${OUT_PATH}`)
   console.log(`  ${dictWords.length}개 단어 / ${allSenses.length}개 뜻`)
   console.log(`  한국어 뜻: ${dictWords.filter(hasKorean).length}개 단어 / ${koSenses}개 뜻`)
+  console.log(
+    `  라틴어 뜻: ${dictWords.filter((w) => hasMeaningIn(w, 'la')).length}개 단어 / ${allSenses.filter((s) => s.meanings.la).length}개 뜻`,
+  )
   console.log(`  ${mb(json)}`)
   console.log(`${STUDY_OUT_PATH}`)
   console.log(

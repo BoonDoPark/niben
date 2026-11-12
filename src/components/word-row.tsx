@@ -1,7 +1,7 @@
 import type { Language, PartOfSpeech } from '@/db/schema'
 import type { DictSense, DictWord } from '@/lib/dictionary'
 import { freqLabel } from '@/lib/dictionary'
-import type { Locale } from '@/i18n/config'
+import { numberLocale, type Locale } from '@/i18n/config'
 
 /** 단어 한 줄을 그리는 데 필요한 화면 언어 정보. 페이지가 사전에서 뽑아 넘긴다. */
 export type WordRowText = {
@@ -19,13 +19,13 @@ export type WordRowText = {
  * @param order 전체 목록에서의 학습 순서. 순서가 의미 없는 화면(무작위 추출)에서는 넘기지 않는다.
  */
 export function WordRow({ word, order, text }: { word: DictWord; order?: number; text: WordRowText }) {
-  const freq = freqLabel(word.rank, text.freq, text.locale)
+  const freq = freqLabel(word.rank, text.freq, numberLocale(text.locale))
 
   return (
     <li className="flex gap-4 py-4">
       {order !== undefined && (
         <span className="w-12 shrink-0 pt-1.5 text-right font-mono text-xs text-zinc-400 tabular-nums">
-          {order.toLocaleString(text.locale)}
+          {order.toLocaleString(numberLocale(text.locale))}
         </span>
       )}
       <div className="min-w-0 flex-1">

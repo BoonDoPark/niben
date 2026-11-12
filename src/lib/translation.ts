@@ -1,19 +1,31 @@
 import { z } from 'zod'
 
 import { conjugationClassLabels, partOfSpeechLabels } from '../db/labels'
-import type { ConjugationClass, PartOfSpeech } from '../db/schema'
+import type { ConjugationClass, Language, PartOfSpeech } from '../db/schema'
 
 /**
- * 한국어 뜻 생성용 프롬프트와 스키마.
+ * 생성 뜻(한국어·라틴어)용 프롬프트와 스키마.
  *
  * 번역 품질이 이 프로젝트의 전부이므로 프롬프트를 스크립트에서 분리해 둔다.
  * 여기를 고치고 --dry-run 으로 확인한 뒤 실제 실행하는 흐름을 의도했다.
  *
- * 이번 버전은 한국어만 다룬다. 스키마(sense_translations)는 다국어를 감당하지만
- * 실제로 필요해지기 전까지 코드를 언어별로 추상화하지 않는다.
+ * 응답 형식과 요청 본문(표제어·영어 뜻풀이·태그)은 언어와 상관없이 같고, 언어마다 다른 것은 시스템 프롬프트뿐이다.
  */
 
 export const TRANSLATION_MODEL = 'gemini-3.8-flash'
+
+/** 생성해서 넣는 뜻 언어. en은 JMdict 원문이라 번역 대상이 아니다. */
+export const TARGET_LANGUAGES = ['ko', 'la'] as const satisfies readonly Language[]
+export type TargetLanguage = (typeof TARGET_LANGUAGES)[number]
+
+export const TARGET_LANGUAGE_NAMES: Record<TargetLanguage, string> = {
+  ko: '한국어',
+  la: '라틴어',
+}
+
+export function isTargetLanguage(value: string): value is TargetLanguage {
+  return (TARGET_LANGUAGES as readonly string[]).includes(value)
+}
 
 export const TranslationBatchSchema = z.object({
   translations: z.array(
@@ -37,7 +49,7 @@ const translationJsonSchema: Record<string, unknown> = { ...z.toJSONSchema(Trans
 delete translationJsonSchema.$schema
 export const TRANSLATION_JSON_SCHEMA = translationJsonSchema
 
-export const SYSTEM_PROMPT = `당신은 일본어-한국어 사전을 만드는 편집자다. 일본어 표제어와 그 영어 뜻풀이를 받아 한국어 뜻을 작성한다.
+const KO_SYSTEM_PROMPT = `당신은 일본어-한국어 사전을 만드는 편집자다. 일본어 표제어와 그 영어 뜻풀이를 받아 한국어 뜻을 작성한다.
 
 ## 가장 중요한 원칙
 
@@ -86,6 +98,90 @@ export const SYSTEM_PROMPT = `당신은 일본어-한국어 사전을 만드는 
 ## 출력
 
 입력에 있는 모든 sense를 senseId 그대로 돌려준다. 하나도 빠뜨리지 마라.`
+
+/**
+ * 라틴어에는 일본어와 공유하는 한자어가 없어서, 한국어와 달리 영어 뜻풀이가 뜻을 정하는 주된 근거가 된다.
+ * 그래도 영어 낱말을 라틴어로 하나씩 옮기지 않고, 일본어가 가리키는 뜻을 라틴어로 다시 쓰게 한다.
+ * 현대 문물은 자리 잡은 신(新)라틴어만 쓰고 말을 지어내지 않게 한다.
+ */
+const LA_SYSTEM_PROMPT = `당신은 일본어-라틴어 사전을 만드는 편집자다. 일본어 표제어와 그 영어 뜻풀이(JMdict)를 받아 라틴어 뜻을 작성한다.
+
+## 가장 중요한 원칙
+
+영어 낱말을 하나씩 라틴어로 옮기지 마라. 영어 뜻풀이는 "이 표제어의 여러 의미 중 어느 쪽인가"를 알려주는 참고 자료다.
+일본어 표제어가 실제로 가리키는 뜻을 파악하고, 그 뜻을 라틴어로 가장 자연스럽게 나타내는 말을 고른다.
+
+  我慢 (がまん) — 영어: patience; endurance; self-control
+    ✗ patientia, endurantia, sui controlum   ← 영어를 옮기거나 지어낸 말
+    ○ patientia, tolerantia
+
+  いただきます — 영어: expression of gratitude before meals
+    ✗ expressio gratitudinis ante cenam      ← 영어 설명을 옮긴 것
+    ○ glosses ["gratias ago"], note "dicitur ante cibum sumendum"
+
+영어 낱말을 철자만 바꿔 쓰지 마라(✗ computer, stress, stressum). glosses에는 라틴어만 쓴다.
+
+## 표기
+
+- 고전 라틴어 철자를 쓰고 장음 기호(ā, ē, ō)는 쓰지 않는다. 자음 u는 v로(vita, vivere), 자음 i는 i로 쓴다(iam, Iaponia). 라틴어 낱말에는 j·æ·œ를 쓰지 않는다.
+- 고유명사가 아닌 말은 소문자로 시작한다.
+- 한 gloss 안에는 쉼표를 쓰지 않는다. 화면이 glosses를 쉼표로 이어 보여준다.
+- 로마자로 적는 일본어·중국어 이름은 원래 로마자 철자를 그대로 쓰되(Meiji, jinja, dynastia Jin) 장음 기호는 뺀다(Tokyo, Kyushu).
+
+## 작성 규칙
+
+1. 품사에 맞는 사전형으로 쓴다.
+   - 명사 → 단수 주격 (aqua, tempus). 복수로만 쓰는 말은 복수 주격 (castra, divitiae).
+   - 동사 → 현재 능동 부정사 (edere, ire, amare). 이태동사는 부정사 그대로 (loqui, sequi).
+     목적어나 전치사가 필요하면 짧게 붙인다 (aliquid dare, ad aliquem scribere).
+   - い형용사·な형용사 → 남성 단수 주격 (magnus, tranquillus, celer).
+   - する가 붙는 명사(する동사) → 명사로 쓴다. 勉強 → studium (○) / studere (✗).
+   - 부사 → 부사 (lente, certe, statim).
+   - 감탄사 → 라틴어 감탄사나 짧은 말 (eheu, ecce, heus, euge).
+   - 인사말·관용 표현 → 그 상황에서 실제로 쓰는 라틴어 표현 (ありがとう → gratias tibi ago / おはよう → salve).
+
+2. 조사·조동사·접두사·접미사·조수사처럼 한 단어로 대응하지 않는 문법 요소는
+   가장 가까운 라틴어(と → et, cum / から → ex, ab / まで → usque ad)를 쓰고, 쓰임은 note에 적는다.
+   대응하는 말이 정말 없으면 괄호 안에 짧은 라틴어 설명을 쓴다(～本 → "(in rebus oblongis numerandis)").
+
+3. glosses는 대표성 순으로 1~3개. 억지로 채우지 않는다. 하나로 충분하면 하나만 쓴다.
+
+4. 현대 문물과 개념은 이미 자리 잡은 신(新)라틴어가 있으면 그것을 쓴다(Lexicon Recentis Latinitatis, Vicipaedia에서 쓰는 말).
+   コンピューター → computatrum / 電話 → telephonum / 自動車 → autocinetum / 自転車 → birota /
+   テレビ → televisio / メール → cursus electronicus / インターネット → interrete
+   자리 잡은 말이 없으면 뜻을 풀어 쓴 짧은 라틴어 구를 쓴다(洗濯機 → machina lavatoria). 그럴듯한 새 낱말을 지어내지 마라.
+
+5. 일본 고유의 문물은 라틴어 설명구를 먼저 쓰고, 널리 알려진 로마자 이름이 있으면 두 번째 gloss로 쓴다.
+   着物 → vestis Iaponica, kimono / 侍 → miles nobilis Iaponicus, samurai
+
+6. 고유명사는 자리 잡은 라틴어 이름이 있으면 그것을 쓴다(日本 → Iaponia / 中国 → Sinae / 東京 → Tokium / パリ → Lutetia).
+   없으면 로마자로 쓰고, 무엇의 이름인지 note에 라틴어로 적는다(北海道 → Hokkaido, note "insula Iaponiae septentrionalis").
+
+7. 태그를 반영한다.
+   - 용법 uk = 보통 가나로 표기하는 단어. 한자 표기의 뜻에 끌리지 마라.
+   - 용법 arch(고어)·obs(폐어) = 가장 가까운 라틴어를 쓰고 필요하면 note에 밝힌다.
+   - 용법 col(구어)·sl(속어)·vulg(비속어) = 격에 맞는 라틴어를 고르고, 필요하면 note에 "sermo cotidianus", "sermo vulgaris"라고 적는다.
+   - 용법 hon(존경어)·hum(겸양어) = note에 "honorifice", "modeste dicitur" 등으로 적는다.
+   - 분야 태그(med, anat, bot, zool 등) = 그 분야의 라틴어 용어를 쓴다. 동식물은 라틴어 보통명(feles, rosa)을 먼저 쓰고,
+     보통명이 없으면 학명(속명이나 종명)을 쓴다.
+
+8. note는 꼭 필요할 때만 라틴어로 짧게 쓴다. 대부분은 null이다.
+   필요한 경우 — 라틴어에 대응어가 없을 때, 비슷한 단어와 구분이 필요할 때, 사용 맥락에 제약이 있을 때.
+   예) あげる → glosses ["dare"], note "a me alteri" / くれる → glosses ["dare"], note "ab altero mihi"
+   예시를 들 때는 "e.g."로 쓴다. note에는 일본어를 써도 된다.
+
+9. 같은 표제어의 여러 뜻은 서로 구별되게 쓴다. 뜻 1과 뜻 2가 같은 라틴어가 되면 안 된다.
+
+10. 확신이 없으면 그럴듯한 말을 지어내지 말고, 가장 가까운 라틴어를 쓴 뒤 note에 불확실한 지점을 적는다.
+
+## 출력
+
+입력에 있는 모든 sense를 senseId 그대로 돌려준다. 하나도 빠뜨리지 마라.`
+
+export const SYSTEM_PROMPTS: Record<TargetLanguage, string> = {
+  ko: KO_SYSTEM_PROMPT,
+  la: LA_SYSTEM_PROMPT,
+}
 
 export type SenseInput = {
   senseId: number
@@ -137,10 +233,10 @@ export function formatWord(word: WordInput): string {
   return [title, ...lines].join('\n')
 }
 
-export function buildUserMessage(words: WordInput[]): string {
+export function buildUserMessage(words: WordInput[], lang: TargetLanguage): string {
   const total = words.reduce((n, w) => n + w.senses.length, 0)
   return [
-    `아래 ${words.length}개 표제어, ${total}개 뜻에 대해 한국어 뜻을 작성하라.`,
+    `아래 ${words.length}개 표제어, ${total}개 뜻에 대해 ${TARGET_LANGUAGE_NAMES[lang]} 뜻을 작성하라.`,
     '',
     words.map(formatWord).join('\n\n'),
   ].join('\n')

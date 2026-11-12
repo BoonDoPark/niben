@@ -12,34 +12,40 @@ import { learningOrder } from '../src/db/order'
 import { senses, senseTranslations, words } from '../src/db/schema'
 import {
   buildUserMessage,
-  SYSTEM_PROMPT,
+  isTargetLanguage,
+  SYSTEM_PROMPTS,
+  TARGET_LANGUAGE_NAMES,
+  TARGET_LANGUAGES,
   TRANSLATION_JSON_SCHEMA,
   TRANSLATION_MODEL,
   TranslationBatchSchema,
   type SenseInput,
+  type TargetLanguage,
   type TranslationBatch,
   type WordInput,
 } from '../src/lib/translation'
 
 /**
- * 아직 한국어 뜻이 없는 표제어를 빈도 순으로 골라 번역해 넣는다.
+ * 아직 그 언어(--lang, 기본 ko) 뜻이 없는 표제어를 학습 순서대로 골라 번역해 넣는다.
  *
  * 임포트와 분리한 이유: 임포트는 결정적이라 몇 번이든 다시 돌릴 수 있지만 번역은 돈이 든다.
  * 한 스크립트에 묶으면 임포트를 재실행할 때마다 번역비가 나간다.
  *
- * 이미 한국어 뜻이 있는 sense는 건너뛰므로 중간에 끊겨도 이어서 실행하면 된다.
+ * 이미 그 언어 뜻이 있는 sense는 건너뛰므로 중간에 끊겨도 이어서 실행하면 된다.
  * 손으로 고친 뜻도 덮이지 않는다.
  *
  * 사용:
  *   npm run translate -- --limit 100 --dry-run   프롬프트만 출력 (API 호출 없음)
  *   npm run translate -- --limit 2000            상위 2000 표제어 번역
+ *   npm run translate -- --lang la --dry-run     라틴어 (ko | la)
  *
  * API 없이 (다른 도구에서 직접 번역):
  *   npm run translate -- --limit 100 --batch 50 --dump <디렉터리>   요청 본문을 파일로 뽑기
  *   npm run translate -- --load <디렉터리 또는 파일>               번역 결과 JSON 넣기
+ *   (--lang 은 --dump 와 --load 에 똑같이 넘긴다)
  */
 
-const LANG = 'ko' as const
+const DEFAULT_LANG: TargetLanguage = 'ko'
 const DEFAULT_WORD_LIMIT = 200
 const DEFAULT_WORDS_PER_REQUEST = 10
 const DEFAULT_CONCURRENCY = 4
@@ -51,6 +57,7 @@ const PRICE_OUTPUT = 9
 const PRICE_CACHED_INPUT = 0.15
 
 type Options = {
+  lang: TargetLanguage
   limit: number
   wordsPerRequest: number
   concurrency: number
@@ -63,6 +70,7 @@ type Options = {
 
 function parseArgs(argv: string[]): Options {
   const opts: Options = {
+    lang: DEFAULT_LANG,
     limit: DEFAULT_WORD_LIMIT,
     wordsPerRequest: DEFAULT_WORDS_PER_REQUEST,
     concurrency: DEFAULT_CONCURRENCY,
@@ -73,7 +81,11 @@ function parseArgs(argv: string[]): Options {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--dry-run') opts.dryRun = true
-    else if (arg === '--limit') opts.limit = Number(argv[++i])
+    else if (arg === '--lang') {
+      const lang = argv[++i]
+      if (!isTargetLanguage(lang)) throw new Error(`--lang 은 ${TARGET_LANGUAGES.join(' | ')} 중 하나입니다: ${lang}`)
+      opts.lang = lang
+    } else if (arg === '--limit') opts.limit = Number(argv[++i])
     else if (arg === '--batch') opts.wordsPerRequest = Number(argv[++i])
     else if (arg === '--concurrency') opts.concurrency = Number(argv[++i])
     else if (arg === '--dump') opts.dump = argv[++i]
@@ -84,16 +96,16 @@ function parseArgs(argv: string[]): Options {
   return opts
 }
 
-/** 아직 한국어 뜻이 없는 표제어를 학습 순서(src/db/order.ts)대로 고른다. */
-async function findPendingWordIds(limit: number): Promise<number[]> {
-  const ko = alias(senseTranslations, 'ko')
+/** 아직 그 언어 뜻이 없는 표제어를 학습 순서(src/db/order.ts)대로 고른다. */
+async function findPendingWordIds(lang: TargetLanguage, limit: number): Promise<number[]> {
+  const target = alias(senseTranslations, 'target')
 
   const rows = await db
     .select({ wordId: words.id })
     .from(senses)
     .innerJoin(words, eq(words.id, senses.wordId))
-    .leftJoin(ko, and(eq(ko.senseId, senses.id), eq(ko.lang, LANG)))
-    .where(isNull(ko.id))
+    .leftJoin(target, and(eq(target.senseId, senses.id), eq(target.lang, lang)))
+    .where(isNull(target.id))
     // words.id 가 기본키라 같은 행의 다른 컬럼(순위)으로 정렬해도 GROUP BY 에 넣지 않아도 된다.
     .groupBy(words.id)
     .orderBy(...learningOrder)
@@ -227,12 +239,12 @@ function parseTranslationJson(text: string | undefined): TranslationBatch | null
 }
 
 /** 모델이 만든 번역을 DB 행으로 바꾼다. 어느 경로로 만들었든 'llm', 미검수로 들어간다. */
-function toRows(translations: TranslationBatch['translations']) {
+function toRows(translations: TranslationBatch['translations'], lang: TargetLanguage) {
   return translations
     .filter((t) => t.glosses.length > 0)
     .map((t) => ({
       senseId: t.senseId,
-      lang: LANG,
+      lang,
       glosses: t.glosses,
       note: t.note,
       source: 'llm' as const,
@@ -244,9 +256,10 @@ function toRows(translations: TranslationBatch['translations']) {
  * API를 거치지 않고 만든 번역(--dump 로 뽑은 요청을 다른 도구에서 번역한 결과)을 넣는다.
  *
  * API 응답과 같은 스키마로 검증하고, DB에 없는 senseId는 버린다.
- * 이미 한국어 뜻이 있는 sense는 API 경로와 마찬가지로 건드리지 않는다.
+ * 이미 그 언어 뜻이 있는 sense는 API 경로와 마찬가지로 건드리지 않는다.
  */
-async function loadTranslations(path: string) {
+async function loadTranslations(path: string, lang: TargetLanguage) {
+  const name = TARGET_LANGUAGE_NAMES[lang]
   const files = statSync(path).isDirectory()
     ? readdirSync(path)
         .filter((f) => f.endsWith('.json'))
@@ -267,7 +280,10 @@ async function loadTranslations(path: string) {
           (r) => r.id,
         ),
   )
-  const rows = toRows(translations.filter((t) => known.has(t.senseId)))
+  const rows = toRows(
+    translations.filter((t) => known.has(t.senseId)),
+    lang,
+  )
 
   let inserted = 0
   for (const batch of chunk(rows, 1000)) {
@@ -279,21 +295,24 @@ async function loadTranslations(path: string) {
     inserted += result.length
   }
 
-  console.log(`  한국어 뜻 ${inserted}개 삽입`)
+  console.log(`  ${name} 뜻 ${inserted}개 삽입`)
   if (ids.length > known.size) console.log(`  DB에 없는 senseId ${ids.length - known.size}개는 버림`)
-  if (rows.length > inserted) console.log(`  이미 한국어 뜻이 있어 건너뜀 ${rows.length - inserted}개`)
+  if (rows.length > inserted) console.log(`  이미 ${name} 뜻이 있어 건너뜀 ${rows.length - inserted}개`)
 }
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
+  const { lang } = opts
+  const langName = TARGET_LANGUAGE_NAMES[lang]
+  const systemPrompt = SYSTEM_PROMPTS[lang]
 
   if (opts.load) {
-    await loadTranslations(opts.load)
+    await loadTranslations(opts.load, lang)
     return
   }
 
-  console.log(`대상 조회 중 (표제어 최대 ${opts.limit}개)...`)
-  const wordIds = await findPendingWordIds(opts.limit)
+  console.log(`${langName} 대상 조회 중 (표제어 최대 ${opts.limit}개)...`)
+  const wordIds = await findPendingWordIds(lang, opts.limit)
   const wordList = await loadWords(wordIds)
   const senseCount = wordList.reduce((n, w) => n + w.senses.length, 0)
 
@@ -307,19 +326,19 @@ async function main() {
 
   if (opts.dryRun) {
     console.log('\n=== 시스템 프롬프트 ===')
-    console.log(SYSTEM_PROMPT)
+    console.log(systemPrompt)
     console.log('\n=== 첫 요청 본문 ===')
-    console.log(buildUserMessage(batches[0]))
+    console.log(buildUserMessage(batches[0], lang))
     console.log('\n(--dry-run: API를 호출하지 않았습니다)')
     return
   }
 
   if (opts.dump) {
     mkdirSync(opts.dump, { recursive: true })
-    writeFileSync(join(opts.dump, 'system-prompt.txt'), SYSTEM_PROMPT)
+    writeFileSync(join(opts.dump, 'system-prompt.txt'), systemPrompt)
     batches.forEach((batch, i) => {
       const name = `batch-${String(i + 1).padStart(3, '0')}.txt`
-      writeFileSync(join(opts.dump!, name), buildUserMessage(batch))
+      writeFileSync(join(opts.dump!, name), buildUserMessage(batch, lang))
     })
     console.log(`\n${opts.dump} 에 시스템 프롬프트와 요청 ${batches.length}건을 썼습니다.`)
     console.log('번역 결과는 batch-NNN.json 으로 저장한 뒤 --load 로 넣으세요.')
@@ -355,9 +374,9 @@ async function main() {
         sent++
         return await ai.models.generateContent({
           model: TRANSLATION_MODEL,
-          contents: buildUserMessage(batch),
+          contents: buildUserMessage(batch, lang),
           config: {
-            systemInstruction: SYSTEM_PROMPT,
+            systemInstruction: systemPrompt,
             responseMimeType: 'application/json',
             responseJsonSchema: TRANSLATION_JSON_SCHEMA,
             thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
@@ -431,13 +450,13 @@ async function main() {
 
     const expected = new Set(batch.flatMap((w) => w.senses.map((s) => s.senseId)))
     // 요청에 없던 senseId를 만들어 왔다면 버린다.
-    const rows = toRows(parsed.translations.filter((t) => expected.has(t.senseId)))
+    const rows = toRows(parsed.translations.filter((t) => expected.has(t.senseId)), lang)
 
     for (const t of rows) expected.delete(t.senseId)
     missing += expected.size
 
     if (rows.length > 0) {
-      // 이미 한국어 뜻이 있으면(동시 실행, 손으로 넣은 것) 건드리지 않는다.
+      // 이미 그 언어 뜻이 있으면(동시 실행, 손으로 넣은 것) 건드리지 않는다.
       await db.insert(senseTranslations).values(rows).onConflictDoNothing()
       inserted += rows.length
     }
@@ -449,7 +468,7 @@ async function main() {
   })
 
   console.log()
-  console.log(`\n한국어 뜻 ${inserted}개 삽입 · API 요청 ${sent}건 보냄 (재시도와 한도 거절 포함)`)
+  console.log(`\n${langName} 뜻 ${inserted}개 삽입 · API 요청 ${sent}건 보냄 (재시도와 한도 거절 포함)`)
   if (missing > 0) console.log(`  응답에서 누락된 뜻 ${missing}개 (다시 실행하면 재시도합니다)`)
   if (failed > 0) console.log(`  실패한 요청 ${failed}건 (다시 실행하면 재시도합니다)`)
   if (dailyQuotaHit) {

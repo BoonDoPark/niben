@@ -12,6 +12,7 @@ import type { Dictionary } from './ko'
 const dictionaries: Record<Locale, () => Promise<Dictionary>> = {
   ko: () => import('./ko').then((m) => m.default),
   en: () => import('./en').then((m) => m.default),
+  la: () => import('./la').then((m) => m.default),
 }
 
 export function getDictionary(locale: Locale): Promise<Dictionary> {

@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react'
 
 import { ErrorMessage, LoadingMessage, WordRow, type WordRowText } from '@/components/word-row'
-import { format } from '@/i18n/config'
+import { format, numberLocale } from '@/i18n/config'
 import type { Dictionary } from '@/i18n/dictionaries/ko'
 import { hasMeaningIn, STUDY_WORDS_PATH, type DictionaryFile, type DictWord } from '@/lib/dictionary'
 import { useDictionary } from '@/lib/use-dictionary'
@@ -51,7 +51,7 @@ export default function RandomWords({ text }: { text: RandomWordsText }) {
 
   const { pool, first } = loaded.value
   const picked = redrawn ?? first
-  const locale = text.row.locale
+  const locale = numberLocale(text.row.locale)
 
   if (pool.length === 0) {
     return <p className="py-16 text-center text-zinc-500">{text.random.empty}</p>
