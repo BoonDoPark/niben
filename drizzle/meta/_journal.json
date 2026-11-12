@@ -15,6 +15,13 @@
       "when": 1794005513581,
       "tag": "0001_low_rogue",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794475077300,
+      "tag": "0002_wide_shocker",
+      "breakpoints": true
     }
   ]
 }

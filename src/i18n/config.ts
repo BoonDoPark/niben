@@ -4,10 +4,10 @@ import type { Language } from '@/db/schema'
  * 화면 언어 설정. 서버(proxy, 페이지)와 클라이언트(언어 선택, 목록) 양쪽에서 쓰므로
  * 서버 전용 코드를 import 하지 않는다. 문구 사전은 ./dictionaries 에 따로 둔다.
  *
- * 화면 언어(Locale)와 뜻 언어(Language)는 다른 개념이다. 한국어 화면도 번역 안 된 뜻은 영어로 보여준다.
+ * 화면 언어(Locale)와 뜻 언어(Language)는 다른 개념이다. 한국어·라틴어 화면도 번역 안 된 뜻은 영어로 보여준다.
  */
 
-export const LOCALES = ['ko', 'en'] as const
+export const LOCALES = ['ko', 'en', 'la'] as const
 export type Locale = (typeof LOCALES)[number]
 
 export const DEFAULT_LOCALE: Locale = 'ko'
@@ -16,15 +16,31 @@ export const DEFAULT_LOCALE: Locale = 'ko'
 export const LOCALE_NAMES: Record<Locale, string> = {
   ko: '한국어',
   en: 'English',
+  la: 'Latina',
 }
 
 /**
  * 화면 언어별 뜻 언어 우선순위. 뜻마다 앞에서부터 있는 언어 하나만 보여준다.
- * 한국어 화면이면 한국어 뜻만 보이고, 아직 번역되지 않은 뜻만 영어로 대신한다.
+ * 한국어·라틴어 화면이면 그 언어 뜻만 보이고, 아직 번역되지 않은 뜻만 영어로 대신한다.
  */
 export const MEANING_LANGUAGES: Record<Locale, readonly Language[]> = {
   ko: ['ko', 'en'],
   en: ['en'],
+  la: ['la', 'en'],
+}
+
+/**
+ * 숫자 표기(toLocaleString)에 넘길 언어 태그. Intl에는 라틴어(la) 데이터가 없어서
+ * 그대로 넘기면 실행 환경의 기본 언어를 따라가고, 서버와 브라우저의 표기가 달라질 수 있다.
+ */
+const NUMBER_LOCALES: Record<Locale, string> = {
+  ko: 'ko',
+  en: 'en',
+  la: 'en',
+}
+
+export function numberLocale(locale: Locale): string {
+  return NUMBER_LOCALES[locale]
 }
 
 /** 사용자가 고른 언어를 기억하는 쿠키. proxy가 브라우저 언어보다 먼저 본다. */

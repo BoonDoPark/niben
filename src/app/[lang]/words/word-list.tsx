@@ -4,7 +4,7 @@ import { useDeferredValue, useMemo, useState } from 'react'
 
 import { ErrorMessage, LoadingMessage, WordRow, type WordRowText } from '@/components/word-row'
 import type { PartOfSpeech } from '@/db/schema'
-import { format } from '@/i18n/config'
+import { format, numberLocale } from '@/i18n/config'
 import type { Dictionary } from '@/i18n/dictionaries/ko'
 import {
   DICTIONARY_PATH,
@@ -112,7 +112,7 @@ export default function WordList({ text }: { text: WordListText }) {
 
   const state = loaded.value
   const t = text.words
-  const locale = text.row.locale
+  const locale = numberLocale(text.row.locale)
   const num = (n: number) => n.toLocaleString(locale)
   // 한국어 화면에서만 번역 범위를 알린다. 영어 뜻은 모든 단어에 있다.
   const showsKorean = text.row.meaningLanguages[0] === 'ko'

@@ -82,7 +82,7 @@ export const jlptLevel = pgEnum('jlpt_level', ['N5', 'N4', 'N3', 'N2', 'N1'])
  * 'en'은 JMdict 원본 gloss를 그대로 담는 자리다. 한국어 번역의 대조 기준이자
  * 재번역 시의 원본이 된다. 언어 추가는 값 하나 늘리는 마이그레이션으로 끝난다.
  */
-export const language = pgEnum('language', ['ko', 'en', 'ja'])
+export const language = pgEnum('language', ['ko', 'en', 'ja', 'la'])
 
 /** 데이터 출처. 재임포트 시 "내가 손댄 것"을 지키기 위해 필요하다. */
 export const dataSource = pgEnum('data_source', [

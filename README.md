@@ -2,7 +2,7 @@
 
 Repository which means to study Japanese easily through this app
 
-일본어 단어를 한국어 뜻으로 학습하는 반응형 웹앱. 로그인 없이 누구나 바로 쓸 수 있다.
+일본어 단어를 한국어 뜻으로 학습하는 반응형 웹앱(영어·라틴어 화면도 있다). 로그인 없이 누구나 바로 쓸 수 있다.
 
 ## 구조
 
@@ -51,7 +51,7 @@ docker exec -it niben-db createdb -U postgres niben
 | `npm run data:import` | 내려받은 JMdict를 DB에 적재 |
 | `npm run data:freq` | JMdict 원본 XML에서 신문 빈도 순위(`freq_rank`) 채우기 |
 | `npm run data:usage` | jiten.moe 빈도 목록에서 실사용 빈도 순위(`usage_rank`, 학습 순서 1차 기준) 채우기 |
-| `npm run translate` | 한국어 뜻 생성 (Gemini API) |
+| `npm run translate` | 한국어·라틴어 뜻 생성 (`--lang`, Gemini API 또는 `--dump`/`--load`) |
 | `npm run data:local` | DB 없이 로컬 JMdict에서 앱용 `public/data/words.json` 생성 |
 | `npm run data:export` | DB에서 앱용 `public/data/words.json`(전체)과 `study.json`(학습 순서 상위 2,000단어) 생성 |
 
@@ -60,7 +60,7 @@ docker exec -it niben-db createdb -U postgres niben
 
 ### 다국어
 
-화면은 한국어·영어로 볼 수 있고, 주소로 나뉜다(`/ko`, `/en`). 오른쪽 위 메뉴로 바꾼다.
+화면은 한국어·영어·라틴어로 볼 수 있고, 주소로 나뉜다(`/ko`, `/en`, `/la`). 오른쪽 위 메뉴로 바꾼다.
 언어 없는 주소(`/`, `/words`)로 들어오면 [src/proxy.ts](src/proxy.ts)가 언어 주소로 보낸다.
 고른 언어(쿠키 `NEXT_LOCALE`) → 브라우저 언어(`Accept-Language`) → 한국어 순으로 정한다.
 
@@ -68,6 +68,7 @@ docker exec -it niben-db createdb -U postgres niben
 | --- | --- | --- |
 | `/ko` | 한국어 | 한국어 (번역 안 된 뜻만 영어) |
 | `/en` | 영어 | 영어 |
+| `/la` | 라틴어 | 라틴어 (번역 안 된 뜻만 영어) |
 
 뜻마다 한 언어로만 보여준다. 검색은 화면에 안 보이는 영어 뜻으로도 된다(`eat` → 食べる).
 
@@ -75,6 +76,8 @@ docker exec -it niben-db createdb -U postgres niben
 - 화면 문구: [src/i18n/dictionaries/](src/i18n/dictionaries/) — `ko.ts`가 기준 모양이고 다른 언어는 같은 모양이어야 한다(타입 검사가 잡는다).
   서버에서만 읽고, 페이지가 필요한 문구를 클라이언트 컴포넌트에 넘긴다.
 - 언어를 늘리려면 `LOCALES`·`LOCALE_NAMES`·`MEANING_LANGUAGES`에 추가하고 사전 파일을 하나 더 만든다.
+  Intl에 데이터가 없는 언어(라틴어)는 `numberLocale`에서 숫자 표기용 언어를 따로 정한다.
+
 한 글자 히라가나 표제어(`の`, `は`, `を` …)의 뜻 중 한국어로 조사·어미에 해당하는 것(~의, ~은/는, ~을/를 …)은
 두 화면 모두에서 뺀다. 단어장에서 따로 익힐 말이 아니어서다. 단어로서의 뜻(`ね` = 저기, `で` = 그래서)은 남기고,
 남는 뜻이 없으면 단어가 빠진다. DB에는 그대로 있고 앱용 JSON을 만들 때만 거른다([scripts/lib/app-filter.ts](scripts/lib/app-filter.ts)).
@@ -101,27 +104,29 @@ npm run data:freq      # words.freq_rank 채우기 (원본 XML을 따로 받는�
 npm run data:usage     # words.usage_rank 채우기 (jiten.moe 빈도 목록을 data/jiten 에 받는다)
 ```
 
-### 한국어 뜻 생성
+### 뜻 생성 (한국어·라틴어)
 
 ```bash
-npm run translate -- --limit 20 --dry-run   # 프롬프트만 출력 (API 호출 없음)
-npm run translate -- --limit 2000           # 학습 순서 상위 2000 표제어 중 뜻이 없는 것
+npm run translate -- --limit 20 --dry-run             # 프롬프트만 출력 (API 호출 없음)
+npm run translate -- --limit 2000                     # 학습 순서 상위 2000 표제어 중 한국어 뜻이 없는 것
+npm run translate -- --lang la --limit 20 --dry-run   # 라틴어
 ```
 
 | 옵션 | 기본값 | 설명 |
 | --- | --- | --- |
-| `--limit` | 200 | 처리할 표제어 수. 한국어 뜻이 없는 표제어를 학습 순서([src/db/order.ts](src/db/order.ts))대로 고른다 |
+| `--lang` | ko | 만들 뜻 언어 (`ko` \| `la`). `--dump`와 `--load`에 똑같이 넘긴다 |
+| `--limit` | 200 | 처리할 표제어 수. 그 언어 뜻이 없는 표제어를 학습 순서([src/db/order.ts](src/db/order.ts))대로 고른다 |
 | `--batch` | 10 | 요청 하나에 담을 표제어 수 |
 | `--concurrency` | 4 | 동시 요청 수 |
 | `--dry-run` | — | 프롬프트만 출력하고 종료 |
 | `--dump <디렉터리>` | — | 요청 본문을 파일로 쓰고 종료 (API 없이 다른 도구로 번역할 때) |
 | `--load <경로>` | — | 번역 결과 JSON(파일 또는 디렉터리)을 검증해 넣고 종료 |
 
-한국어 뜻이 이미 있는 뜻은 건너뛴다. 중간에 끊겨도 다시 실행하면 이어지고,
+그 언어 뜻이 이미 있는 뜻은 건너뛴다. 중간에 끊겨도 다시 실행하면 이어지고,
 손으로 고친 뜻은 덮이지 않는다. 실행이 끝나면 실제 토큰 사용량과 추정 비용을 출력한다.
 번역한 뒤에는 `npm run data:export`를 다시 돌려야 화면에 반영된다.
 
-현재 상태: 앱에 나오는 22,576단어, 뜻 36,855개에 모두 한국어 뜻이 있다.
+현재 상태: 앱에 나오는 22,576단어, 뜻 36,855개에 모두 한국어 뜻과 라틴어 뜻이 있다.
 `--dump`로 뽑은 요청을 Claude가 직접 번역해 `--load`로 넣었다. 모두 `source='llm'`, `verified=false`(미검수)다.
 
 `GEMINI_API_KEY`가 필요하다([Google AI Studio](https://aistudio.google.com/apikey)에서 발급, 무료 등급 있음).
@@ -139,6 +144,19 @@ npm run translate -- --limit 2000           # 학습 순서 상위 2000 표제�
 다시 돌려도 손으로 고친 내용이 덮이지 않는다.
 한국어 번역은 여기서 만들지 않는다 — 임포트는 몇 번이든 재실행할 수 있어야 하는데
 번역은 비용이 들기 때문에, 섞어두면 재실행할 때마다 번역비가 나간다.
+
+## 배포
+
+사이트: https://niben.vercel.app (Vercel 프로젝트 `niben`)
+
+```bash
+npm run data:export      # public/data 를 최신 DB 내용으로 다시 만든다
+vercel deploy --prod     # 이 컴퓨터의 파일을 그대로 올려 빌드한다
+```
+
+앱용 사전 JSON(`public/data`)은 git에 없어서 GitHub 연동 자동 배포로는 데이터가 빠진다.
+그래서 로컬에서 Vercel CLI로 올린다. CLI는 `.gitignore`를 보지 않고 [.vercelignore](.vercelignore)만 보므로,
+`.env`와 원본 데이터(`data/`)는 그 파일에서 뺀다. 런타임에 필요한 환경 변수는 없다(DB는 빌드에도 쓰지 않는다).
 
 ## 스키마
 
@@ -187,10 +205,15 @@ npm run translate -- --limit 2000           # 학습 순서 상위 2000 표제�
 | 악센트 | [kanjium](https://github.com/mifunetoshiro/kanjium) | CC BY-SA 4.0 |
 | 예문 | [Tatoeba](https://tatoeba.org/en/downloads) | CC BY 2.0 FR |
 | 한국어 뜻 | JMdict 영어 gloss + 일본어 표제어에서 번역 후 직접 검수 | — |
+| 라틴어 뜻 | JMdict 영어 gloss + 일본어 표제어에서 생성 (미검수) | — |
 
 JMdict에 한국어 gloss는 없다. 영어 gloss만 번역하면 2단계 손실이 생기므로,
 **일본어 표제어를 함께 넘겨** 한자어 직결 대응을 살리고 영어는 의미 구분용으로만 쓴다.
 (`微妙` → 영어만 보면 "섬세한/어려운", 일본어를 같이 보면 "미묘하다")
+
+라틴어는 일본어와 공유하는 한자어가 없어 영어 gloss가 뜻을 고르는 주된 근거가 되지만, 영어 낱말을 하나씩 옮기지 않고
+일본어가 가리키는 뜻을 라틴어로 다시 쓴다. 고전 어휘를 먼저 쓰고, 현대 문물은 자리 잡은 신(新)라틴어
+(`computatrum`, `telephonum`)만 쓴다. 장음 기호는 쓰지 않는다. 규칙은 [src/lib/translation.ts](src/lib/translation.ts)의 라틴어 프롬프트에 있다.
 
 번역은 표제어 단위로 묶어 보낸다. 뜻을 하나씩 따로 보내면 모델이 "이 표제어의 다른 뜻과
 겹치지 않게 쓰라"는 판단을 할 수 없기 때문이다. 뜻이 여러 개인 단어에서 차이가 크다.
