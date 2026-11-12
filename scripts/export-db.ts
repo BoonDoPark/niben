@@ -30,8 +30,8 @@ import { isSingleKana, keepSense, resolveWordPos } from './lib/app-filter'
 
 const OUT_DIR = join(process.cwd(), 'public', 'data')
 const OUT_PATH = join(OUT_DIR, 'words.json')
-/** 메인 화면(무작위 단어)용. 학습 순서 상위 STUDY_RANGE 단어 중 한국어 뜻이 있는 것만 담는다. */
-const KO_OUT_PATH = join(OUT_DIR, 'words-ko.json')
+/** 메인 화면(무작위 단어)용. 학습 순서 상위 STUDY_RANGE 단어만 담는다. 화면 언어별 거르기는 화면이 한다. */
+const STUDY_OUT_PATH = join(OUT_DIR, 'study.json')
 const EXPORTED_LANGS: Language[] = ['ko', 'en']
 
 async function main() {
@@ -110,14 +110,14 @@ async function main() {
     words: dictWords,
   }
 
-  const koWords = dictWords.slice(0, STUDY_RANGE).filter(hasKorean)
-  const koOut: DictionaryFile = { ...out, words: koWords }
+  const studyWords = dictWords.slice(0, STUDY_RANGE)
+  const studyOut: DictionaryFile = { ...out, words: studyWords }
 
   mkdirSync(OUT_DIR, { recursive: true })
   const json = JSON.stringify(out)
   writeFileSync(OUT_PATH, json)
-  const koJson = JSON.stringify(koOut)
-  writeFileSync(KO_OUT_PATH, koJson)
+  const studyJson = JSON.stringify(studyOut)
+  writeFileSync(STUDY_OUT_PATH, studyJson)
 
   const mb = (s: string) => `${(Buffer.byteLength(s) / 1024 / 1024).toFixed(1)} MB`
   const allSenses = dictWords.flatMap((w) => w.senses)
@@ -126,8 +126,10 @@ async function main() {
   console.log(`  ${dictWords.length}개 단어 / ${allSenses.length}개 뜻`)
   console.log(`  한국어 뜻: ${dictWords.filter(hasKorean).length}개 단어 / ${koSenses}개 뜻`)
   console.log(`  ${mb(json)}`)
-  console.log(`${KO_OUT_PATH}`)
-  console.log(`  상위 ${STUDY_RANGE.toLocaleString()}단어 중 한국어 뜻이 있는 ${koWords.length}개 · ${mb(koJson)}`)
+  console.log(`${STUDY_OUT_PATH}`)
+  console.log(
+    `  상위 ${studyWords.length.toLocaleString()}단어 (한국어 뜻 있음 ${studyWords.filter(hasKorean).length}개) · ${mb(studyJson)}`,
+  )
   console.log(`\n한 글자 히라가나 — 조사 뜻뿐이라 뺀 단어 ${removed.length}개: ${removed.join(' ')}`)
   console.log(`  조사 뜻만 빼고 남긴 단어 ${trimmed.length}개: ${trimmed.join(' ')}`)
 }
