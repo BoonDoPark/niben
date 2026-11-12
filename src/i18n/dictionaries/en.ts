@@ -54,6 +54,8 @@ const en: Dictionary = {
   },
   study: {
     open: 'Examples & practice',
+    back: 'Back',
+    notFound: 'This word is not available here.',
     examples: 'Examples',
     noExamples: 'No example sentences for this word yet. You can still practice writing.',
     loadingExamples: 'Loading examples…',

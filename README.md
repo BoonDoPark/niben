@@ -61,7 +61,14 @@ docker exec -it niben-db createdb -U postgres niben
 
 ### 예문과 연습
 
-두 화면 모두 단어 머리(표제어 줄)를 누르면 예문·연습 패널이 열린다([src/components/word-study.tsx](src/components/word-study.tsx)).
+두 화면 모두 단어를 누르면 단어 상세로 들어간다(주소에 `?w=단어ID`가 붙는다, [src/components/word-browser.tsx](src/components/word-browser.tsx)).
+상세 화면은 뜻 전체와 예문·연습([src/components/word-study.tsx](src/components/word-study.tsx))을 보여준다.
+
+- 목록은 지우지 않고 숨겨 두었다가 되살린다. 화면의 "뒤로가기"나 브라우저 뒤로가기로 돌아오면
+  검색어·품사 필터·"더 보기" 개수·무작위로 뽑은 50단어와 들어가기 전 스크롤 위치가 그대로다.
+- 상세 주소로 바로 들어와도(새 탭, 공유한 링크) 그 단어가 보이고, 이때 "뒤로가기"는 같은 화면의 목록으로 간다.
+- 주소를 바꾸는 데는 `window.history.pushState`를 쓴다(Next가 `useSearchParams`와 맞춰 준다).
+  그래서 목록 페이지는 `Suspense`로 감싼다.
 
 - **예문**: 일본어 원문과 가나 읽기. "뜻 보기"를 누르면 화면 언어로 된 번역이 나온다.
   예문 파일(`public/data/examples.json`)은 처음 단어를 펼칠 때 한 번만 받는다.

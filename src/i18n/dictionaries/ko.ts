@@ -58,6 +58,8 @@ const ko = {
   },
   study: {
     open: '예문·연습',
+    back: '뒤로가기',
+    notFound: '이 화면에서 찾을 수 없는 단어입니다.',
     examples: '예문',
     noExamples: '이 단어는 아직 예문이 없습니다. 작문 연습은 할 수 있습니다.',
     loadingExamples: '예문을 불러오는 중…',

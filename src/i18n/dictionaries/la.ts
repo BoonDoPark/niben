@@ -57,6 +57,8 @@ const la: Dictionary = {
   },
   study: {
     open: 'Exempla et exercitatio',
+    back: 'Redi',
+    notFound: 'Hoc vocabulum hic non invenitur.',
     examples: 'Exempla',
     noExamples: 'Huic vocabulo nondum sunt exempla. Sententias tamen scribere potes.',
     loadingExamples: 'Exempla onerantur…',

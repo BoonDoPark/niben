@@ -10,7 +10,7 @@ import type { CheckRequest, CheckResult } from '@/lib/grading'
 import { useExamples } from '@/lib/use-examples'
 
 /**
- * 단어를 펼쳤을 때 나오는 학습 패널.
+ * 단어 상세 화면(WordBrowser)의 학습 패널.
  * - 예문: 일본어 원문·가나 읽기, 누르면 화면 언어 번역. 예문마다 해석을 써서 채점받는다(translate).
  * - 작문: 이 단어를 넣어 직접 쓴 일본어 문장을 채점받는다(compose).
  * 채점은 /api/check(Gemini)가 하고, 피드백은 화면 언어로 온다.
@@ -28,7 +28,7 @@ function pick<T>(values: Partial<Record<Language, T>>, langs: readonly Language[
   return null
 }
 
-export function WordStudy({ word, text, id }: { word: DictWord; text: WordRowText; id: string }) {
+export function WordStudy({ word, text, id }: { word: DictWord; text: WordRowText; id?: string }) {
   const t = text.study
   const state = useExamples(word.id)
   // 채점할 때 함께 보내는 단어 뜻(화면 언어). 뜻이 아주 많은 단어(する 등)는 앞쪽만 보낸다.

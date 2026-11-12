@@ -1,8 +1,7 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { createContext, use, type MouseEvent, type ReactNode } from 'react'
 
-import { WordStudy } from '@/components/word-study'
 import type { Language, PartOfSpeech } from '@/db/schema'
 import type { Dictionary } from '@/i18n/dictionaries/ko'
 import type { DictSense, DictWord } from '@/lib/dictionary'
@@ -17,65 +16,102 @@ export type WordRowText = {
   pos: Record<PartOfSpeech, string>
   /** "빈도 {n}위 안" */
   freq: string
-  /** 단어를 펼쳤을 때 나오는 예문·연습 패널(WordStudy)의 문구 */
+  /** 단어 상세(예문·연습) 화면의 문구 */
   study: Dictionary['study']
 }
 
 /**
+ * 단어 상세로 들어가는 함수. WordBrowser(components/word-browser.tsx)가 내려준다.
+ * 없으면 단어 줄은 보통 링크(?w=단어ID)로 동작한다.
+ */
+export const OpenWordContext = createContext<((word: DictWord) => void) | null>(null)
+
+/** 주소의 이 검색어 값이 단어 ID면 단어 상세를 보여준다. */
+export const WORD_PARAM = 'w'
+
+/**
  * 단어 한 줄. 메인(무작위 단어)과 전체 단어 목록이 함께 쓴다.
- * 단어 머리(표제어 줄)를 누르면 예문·연습 패널(WordStudy)이 열린다.
+ * 줄을 누르면 단어 상세(예문·연습)로 들어간다. 새 탭으로 열기(가운데 클릭, ⌘/Ctrl+클릭)는 그대로 둔다.
  *
  * @param order 전체 목록에서의 학습 순서. 순서가 의미 없는 화면(무작위 추출)에서는 넘기지 않는다.
  */
 export function WordRow({ word, order, text }: { word: DictWord; order?: number; text: WordRowText }) {
-  const freq = freqLabel(word.rank, text.freq, numberLocale(text.locale))
-  const [open, setOpen] = useState(false)
-  const panelId = useId()
+  const openWord = use(OpenWordContext)
+
+  function onClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!openWord || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    openWord(word)
+  }
 
   return (
-    <li className="flex gap-4 py-4">
-      {order !== undefined && (
-        <span className="w-12 shrink-0 pt-1.5 text-right font-mono text-xs text-zinc-400 tabular-nums">
-          {order.toLocaleString(numberLocale(text.locale))}
+    <li>
+      <a
+        href={`?${WORD_PARAM}=${word.id}`}
+        onClick={onClick}
+        className="group -mx-2 flex gap-4 rounded-lg px-2 py-4 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-zinc-400 dark:hover:bg-zinc-900"
+      >
+        {order !== undefined && (
+          <span className="w-12 shrink-0 pt-1.5 text-right font-mono text-xs text-zinc-400 tabular-nums">
+            {order.toLocaleString(numberLocale(text.locale))}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <WordHeading word={word} text={text}>
+            <span className="ml-auto self-center text-xs text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200">
+              {text.study.open} ›
+            </span>
+          </WordHeading>
+          <SenseList word={word} text={text} />
+        </div>
+      </a>
+    </li>
+  )
+}
+
+/** 표제어 줄: 표제어, 읽기, 품사, 빈도. children 은 줄 끝에 붙는다. */
+export function WordHeading({
+  word,
+  text,
+  size = 'md',
+  children,
+}: {
+  word: DictWord
+  text: WordRowText
+  size?: 'md' | 'lg'
+  children?: ReactNode
+}) {
+  const freq = freqLabel(word.rank, text.freq, numberLocale(text.locale))
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <span lang="ja" className={size === 'lg' ? 'text-4xl font-semibold' : 'text-2xl font-semibold'}>
+        {word.lemma}
+      </span>
+      {word.reading !== word.lemma && (
+        <span lang="ja" className={size === 'lg' ? 'text-lg text-zinc-500' : 'text-zinc-500'}>
+          {word.reading}
         </span>
       )}
-      <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls={panelId}
-          className="group -mx-2 flex w-[calc(100%+1rem)] flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg px-2 py-0.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900"
-        >
-          <span lang="ja" className="text-2xl font-semibold">
-            {word.lemma}
-          </span>
-          {word.reading !== word.lemma && (
-            <span lang="ja" className="text-zinc-500">
-              {word.reading}
-            </span>
-          )}
-          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-            {text.pos[word.pos]}
-          </span>
-          {freq && <span className="text-xs text-zinc-400">{freq}</span>}
-          <span className="ml-auto text-xs text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200">
-            {text.study.open} {open ? '▴' : '▾'}
-          </span>
-        </button>
-        <ol className="mt-2 space-y-1.5 text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">
-          {word.senses.map((s, i) => (
-            <li key={i} className="flex gap-2">
-              {word.senses.length > 1 && (
-                <span className="shrink-0 text-zinc-400 tabular-nums">{i + 1}.</span>
-              )}
-              <SenseText sense={s} text={text} />
-            </li>
-          ))}
-        </ol>
-        {open && <WordStudy word={word} text={text} id={panelId} />}
-      </div>
-    </li>
+      <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+        {text.pos[word.pos]}
+      </span>
+      {freq && <span className="text-xs text-zinc-400">{freq}</span>}
+      {children}
+    </div>
+  )
+}
+
+/** 뜻 목록. 뜻이 둘 이상이면 번호를 붙인다. */
+export function SenseList({ word, text }: { word: DictWord; text: WordRowText }) {
+  return (
+    <ol className="mt-2 space-y-1.5 text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+      {word.senses.map((s, i) => (
+        <li key={i} className="flex gap-2">
+          {word.senses.length > 1 && <span className="shrink-0 text-zinc-400 tabular-nums">{i + 1}.</span>}
+          <SenseText sense={s} text={text} />
+        </li>
+      ))}
+    </ol>
   )
 }
 
