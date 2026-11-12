@@ -163,7 +163,7 @@ type GradeState =
   | { status: 'done'; result: CheckResult }
   | { status: 'error'; message: string }
 
-const KNOWN_ERRORS = ['rate_limited', 'quota', 'not_configured', 'failed'] as const
+const KNOWN_ERRORS = ['rate_limited', 'busy', 'quota', 'not_configured', 'failed'] as const
 
 function GradeForm({
   label,

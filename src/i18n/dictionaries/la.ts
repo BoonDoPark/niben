@@ -80,6 +80,7 @@ const la: Dictionary = {
     poweredBy: 'Probat Gemini (errare potest)',
     errors: {
       rate_limited: 'Nimis multae petitiones. Paulo post iterum conare.',
+      busy: 'Probatio nunc occupata est. Paulo post iterum conare.',
       quota: 'Plura nunc probari non possunt. Postea iterum conare.',
       not_configured: 'Probatio nunc praesto non est.',
       failed: 'Responsum probari non potuit. Paulo post iterum conare.',

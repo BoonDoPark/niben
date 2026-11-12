@@ -75,8 +75,9 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof GradingError) {
       if (err.code === 'not_configured') return error('not_configured', 503)
+      console.error('[api/check]', err.code, err.message)
+      if (err.code === 'busy') return error('busy', 503)
       if (err.code === 'quota') return error('quota', 429)
-      console.error('[api/check]', err.message)
     } else {
       console.error('[api/check]', err)
     }

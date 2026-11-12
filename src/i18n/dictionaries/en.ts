@@ -77,6 +77,7 @@ const en: Dictionary = {
     poweredBy: 'Checked by Gemini (it can make mistakes)',
     errors: {
       rate_limited: 'Too many requests. Please try again in a moment.',
+      busy: 'The checker is busy right now. Please try again in a moment.',
       quota: 'The checking limit has been reached. Please try again later.',
       not_configured: 'Checking is not available right now.',
       failed: 'Could not check your answer. Please try again in a moment.',

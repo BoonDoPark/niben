@@ -15,9 +15,26 @@ import { LOCALES, type Locale } from '@/i18n/config'
  * 피드백은 화면 언어(ko, en, la)로 받는다.
  */
 
-/** 기본 모델. 바꾸려면 환경 변수 GEMINI_MODEL 을 쓴다. */
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
-const REQUEST_TIMEOUT_MS = 30_000
+/**
+ * 채점에 쓰는 모델을 앞에서부터 시도한다. 바꾸려면 환경 변수 GEMINI_MODEL 에 쉼표로 적는다.
+ *
+ * 무료 등급에서는 모델마다 붐비는 때가 다르다. 한 모델이 503(붐빔)·504(시간 초과)·429(한도)를 내면
+ * 다음 모델로 넘어간다(모델마다 한도도 따로다). 2026-11-13 잰 응답 시간은 3.5-flash 1~2초,
+ * 3.1-flash-lite 1~1.5초, 3.5-flash-lite 4~9초(가끔 20초 넘게 걸리거나 503)였다.
+ * 생각 단계 MINIMAL 을 지원하는 모델만 넣는다(3.7-flash 는 400).
+ */
+const DEFAULT_MODELS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite']
+/** 한 모델에 기다리는 시간. 넘기면 다음 모델로 간다. */
+const ATTEMPT_TIMEOUT_MS = 12_000
+/** 모든 시도를 합친 시간. app/api/check 의 maxDuration(40초) 안에 끝나야 한다. */
+const TOTAL_BUDGET_MS = 32_000
+/** 남은 시간이 이보다 적으면 새 모델을 시도하지 않는다. */
+const MIN_ATTEMPT_MS = 3_000
+
+function gradingModels(): string[] {
+  const fromEnv = process.env.GEMINI_MODEL?.split(',').map((m) => m.trim()).filter(Boolean)
+  return fromEnv?.length ? fromEnv : DEFAULT_MODELS
+}
 
 export const CheckRequestSchema = z
   .object({
@@ -100,18 +117,38 @@ let client: GoogleGenAI | null = null
 function getClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return null
-  // SDK 기본값은 실패하면 최대 5번, 사이에 최대 60초씩 기다리며 다시 보낸다. 사용자가 화면에서 기다리는
-  // 요청이라 재시도하지 않고 30초에서 끊는다(무료 등급에서는 실패한 요청도 한도를 깎는다).
-  client ??= new GoogleGenAI({ apiKey, httpOptions: { timeout: REQUEST_TIMEOUT_MS, retryOptions: { attempts: 1 } } })
+  // SDK 기본값은 실패하면 같은 모델로 최대 5번, 사이에 최대 60초씩 기다리며 다시 보낸다. 사용자가 화면에서
+  // 기다리는 요청이라 SDK 재시도는 끄고, 붐비면 gradeAnswer 가 다른 모델로 넘어간다.
+  client ??= new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } })
   return client
 }
 
 export class GradingError extends Error {
   constructor(
-    readonly code: 'not_configured' | 'quota' | 'failed',
+    /** busy: 모든 모델이 붐비거나 시간 안에 답하지 못함. quota: 모든 모델이 한도에 걸림. */
+    readonly code: 'not_configured' | 'busy' | 'quota' | 'failed',
     message: string,
   ) {
     super(message)
+  }
+}
+
+/** 다음 모델로 넘어갈 실패의 종류. */
+function failureKind(err: unknown): 'quota' | 'busy' | 'other' {
+  if (err instanceof ApiError) {
+    if (err.status === 429) return 'quota'
+    if ([500, 502, 503, 504].includes(err.status)) return 'busy'
+    return 'other'
+  }
+  // 시간 초과로 끊었거나 연결이 끊긴 경우(HTTP 응답이 없다)
+  return 'busy'
+}
+
+function parseResult(text: string | undefined): CheckResult | null {
+  try {
+    return CheckResultSchema.parse(JSON.parse(text ?? ''))
+  } catch {
+    return null
   }
 }
 
@@ -119,29 +156,46 @@ export async function gradeAnswer(req: CheckRequest): Promise<CheckResult> {
   const ai = getClient()
   if (!ai) throw new GradingError('not_configured', 'GEMINI_API_KEY 가 없습니다')
 
-  let text: string | undefined
-  try {
-    const res = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
-      contents: userMessage(req),
-      config: {
-        systemInstruction: systemPrompt(req.mode, req.locale),
-        responseMimeType: 'application/json',
-        responseJsonSchema: resultJsonSchema,
-        // 채점은 짧은 판단이라 생각 단계를 최소로 해서 응답을 빠르게 한다.
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-        maxOutputTokens: 2048,
-      },
-    })
-    text = res.text
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 429) throw new GradingError('quota', err.message)
-    throw new GradingError('failed', err instanceof Error ? err.message : String(err))
+  const started = Date.now()
+  const failures: string[] = []
+  let quota = 0
+  let busy = 0
+
+  for (const model of gradingModels()) {
+    const remaining = TOTAL_BUDGET_MS - (Date.now() - started)
+    if (remaining < MIN_ATTEMPT_MS) break
+    const attemptStart = Date.now()
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: userMessage(req),
+        config: {
+          systemInstruction: systemPrompt(req.mode, req.locale),
+          responseMimeType: 'application/json',
+          responseJsonSchema: resultJsonSchema,
+          // 채점은 짧은 판단이라 생각 단계를 최소로 해서 응답을 빠르게 한다.
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          maxOutputTokens: 2048,
+          httpOptions: { timeout: Math.min(ATTEMPT_TIMEOUT_MS, remaining) },
+        },
+      })
+      const result = parseResult(res.text)
+      if (result) {
+        if (failures.length) console.warn('[grading] 다른 모델로 넘어가 성공:', model, '|', failures.join(' | '))
+        return result
+      }
+      failures.push(`${model}: 응답을 해석하지 못함`)
+    } catch (err) {
+      const kind = failureKind(err)
+      if (kind === 'quota') quota++
+      else if (kind === 'busy') busy++
+      const status = err instanceof ApiError ? err.status : 'no-response'
+      failures.push(`${model}: ${status} (${Date.now() - attemptStart}ms)`)
+    }
   }
 
-  try {
-    return CheckResultSchema.parse(JSON.parse(text ?? ''))
-  } catch {
-    throw new GradingError('failed', '응답을 해석하지 못했습니다')
-  }
+  const detail = failures.join(' | ') || '시도할 시간이 없음'
+  if (quota > 0 && busy === 0 && quota === failures.length) throw new GradingError('quota', detail)
+  if (busy > 0) throw new GradingError('busy', detail)
+  throw new GradingError('failed', detail)
 }
