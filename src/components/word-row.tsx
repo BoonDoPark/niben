@@ -1,4 +1,10 @@
+'use client'
+
+import { useId, useState } from 'react'
+
+import { WordStudy } from '@/components/word-study'
 import type { Language, PartOfSpeech } from '@/db/schema'
+import type { Dictionary } from '@/i18n/dictionaries/ko'
 import type { DictSense, DictWord } from '@/lib/dictionary'
 import { freqLabel } from '@/lib/dictionary'
 import { numberLocale, type Locale } from '@/i18n/config'
@@ -11,15 +17,20 @@ export type WordRowText = {
   pos: Record<PartOfSpeech, string>
   /** "빈도 {n}위 안" */
   freq: string
+  /** 단어를 펼쳤을 때 나오는 예문·연습 패널(WordStudy)의 문구 */
+  study: Dictionary['study']
 }
 
 /**
  * 단어 한 줄. 메인(무작위 단어)과 전체 단어 목록이 함께 쓴다.
+ * 단어 머리(표제어 줄)를 누르면 예문·연습 패널(WordStudy)이 열린다.
  *
  * @param order 전체 목록에서의 학습 순서. 순서가 의미 없는 화면(무작위 추출)에서는 넘기지 않는다.
  */
 export function WordRow({ word, order, text }: { word: DictWord; order?: number; text: WordRowText }) {
   const freq = freqLabel(word.rank, text.freq, numberLocale(text.locale))
+  const [open, setOpen] = useState(false)
+  const panelId = useId()
 
   return (
     <li className="flex gap-4 py-4">
@@ -29,7 +40,13 @@ export function WordRow({ word, order, text }: { word: DictWord; order?: number;
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className="group -mx-2 flex w-[calc(100%+1rem)] flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg px-2 py-0.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900"
+        >
           <span lang="ja" className="text-2xl font-semibold">
             {word.lemma}
           </span>
@@ -42,7 +59,10 @@ export function WordRow({ word, order, text }: { word: DictWord; order?: number;
             {text.pos[word.pos]}
           </span>
           {freq && <span className="text-xs text-zinc-400">{freq}</span>}
-        </div>
+          <span className="ml-auto text-xs text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200">
+            {text.study.open} {open ? '▴' : '▾'}
+          </span>
+        </button>
         <ol className="mt-2 space-y-1.5 text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">
           {word.senses.map((s, i) => (
             <li key={i} className="flex gap-2">
@@ -53,6 +73,7 @@ export function WordRow({ word, order, text }: { word: DictWord; order?: number;
             </li>
           ))}
         </ol>
+        {open && <WordStudy word={word} text={text} id={panelId} />}
       </div>
     </li>
   )

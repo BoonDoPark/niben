@@ -18,6 +18,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Next 내부 파일(_next), 사전 JSON(/data), 확장자가 있는 정적 파일(favicon.ico, *.svg)은 건드리지 않는다.
-  matcher: ['/((?!_next|data/|.*\\..*).*)'],
+  // Next 내부 파일(_next), API(/api), 사전 JSON(/data), 확장자가 있는 정적 파일(favicon.ico, *.svg)은 건드리지 않는다.
+  matcher: ['/((?!_next|api/|data/|.*\\..*).*)'],
 }

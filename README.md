@@ -52,11 +52,31 @@ docker exec -it niben-db createdb -U postgres niben
 | `npm run data:freq` | JMdict 원본 XML에서 신문 빈도 순위(`freq_rank`) 채우기 |
 | `npm run data:usage` | jiten.moe 빈도 목록에서 실사용 빈도 순위(`usage_rank`, 학습 순서 1차 기준) 채우기 |
 | `npm run translate` | 한국어·라틴어 뜻 생성 (`--lang`, Gemini API 또는 `--dump`/`--load`) |
+| `npm run examples` | 예문 생성 (`--dump`/`--load`, 상위 2,000단어의 앞쪽 뜻 2개까지) |
 | `npm run data:local` | DB 없이 로컬 JMdict에서 앱용 `public/data/words.json` 생성 |
-| `npm run data:export` | DB에서 앱용 `public/data/words.json`(전체)과 `study.json`(학습 순서 상위 2,000단어) 생성 |
+| `npm run data:export` | DB에서 앱용 `public/data/words.json`(전체), `study.json`(학습 순서 상위 2,000단어), `examples.json`(예문) 생성 |
 
 화면은 두 개다. 메인(`/ko`)은 `study.json`에서 화면 언어의 뜻이 있는 단어 50개를 무작위로 뽑아 보여 주고
 ("다시 뽑기"로 새로 뽑는다), 전체 단어 탭(`/ko/words`)은 `words.json` 전체를 검색·품사별로 거른다.
+
+### 예문과 연습
+
+두 화면 모두 단어 머리(표제어 줄)를 누르면 예문·연습 패널이 열린다([src/components/word-study.tsx](src/components/word-study.tsx)).
+
+- **예문**: 일본어 원문과 가나 읽기. "뜻 보기"를 누르면 화면 언어로 된 번역이 나온다.
+  예문 파일(`public/data/examples.json`)은 처음 단어를 펼칠 때 한 번만 받는다.
+- **해석 채점**: 예문마다 화면 언어로 뜻을 써서 채점받는다. 채점하면 모범 번역도 보여준다.
+- **작문 채점**: 그 단어를 넣어 일본어 문장을 직접 써서 채점받는다. 예문이 없는 단어도 할 수 있다.
+
+채점은 `POST /api/check`([src/app/api/check/route.ts](src/app/api/check/route.ts))가 Gemini로 한다.
+프롬프트와 응답 형식은 [src/lib/grading.ts](src/lib/grading.ts)에 있고, 피드백은 화면 언어(한국어·영어·라틴어)로 온다.
+API 키는 서버에서만 읽는다(브라우저에서 Gemini를 직접 부르면 키가 그대로 드러난다).
+
+- 로그인이 없는 공개 사이트라, 다른 사이트에서 오는 요청을 막고 IP마다 10분에 30번으로 제한한다.
+  제한은 서버 인스턴스 메모리에 두므로 완전하지 않다. 트래픽이 늘면 Vercel 방화벽 규칙이나 공유 저장소로 옮긴다.
+- 기본 모델은 `gemini-3.5-flash-lite`(환경 변수 `GEMINI_MODEL`로 바꾼다). `gemini-3.8-flash`는 응답이 수십 초~수 분 걸려 화면에서 쓰기 어려웠다.
+  SDK의 자동 재시도(최대 5번, 최대 60초 간격)를 끄고 30초에서 끊는다.
+- `GEMINI_API_KEY`가 없으면 채점 버튼을 눌렀을 때 "채점 기능을 쓸 수 없음"이 나온다. 예문 보기는 키 없이도 된다.
 
 ### 다국어
 
@@ -145,6 +165,17 @@ npm run translate -- --lang la --limit 20 --dry-run   # 라틴어
 한국어 번역은 여기서 만들지 않는다 — 임포트는 몇 번이든 재실행할 수 있어야 하는데
 번역은 비용이 들기 때문에, 섞어두면 재실행할 때마다 번역비가 나간다.
 
+### 예문 생성
+
+```bash
+npm run examples -- --dump <디렉터리>   # 예문이 없는 뜻을 묶음 파일로 뽑기 (system-prompt.txt + batch-NNN.txt)
+npm run examples -- --load <디렉터리>   # batch-NNN.json 을 검증해 examples·example_translations 에 넣기
+```
+
+대상은 앱에 나오는 학습 순서 상위 2,000단어의 앞쪽 뜻 2개까지다(앱과 같은 뜻 거르기를 쓴다).
+예문마다 일본어 원문·가나 읽기와 한국어·영어·라틴어 번역을 만든다. 이미 예문이 있는 뜻은 뽑지도 넣지도 않는다.
+현재 예문은 `--dump`로 뽑은 요청을 Claude가 직접 써서 넣었다(`source='llm'`, 미검수).
+
 ## 배포
 
 사이트: https://niben.vercel.app (Vercel 프로젝트 `niben`)
@@ -156,7 +187,9 @@ vercel deploy --prod     # 이 컴퓨터의 파일을 그대로 올려 빌드한
 
 앱용 사전 JSON(`public/data`)은 git에 없어서 GitHub 연동 자동 배포로는 데이터가 빠진다.
 그래서 로컬에서 Vercel CLI로 올린다. CLI는 `.gitignore`를 보지 않고 [.vercelignore](.vercelignore)만 보므로,
-`.env`와 원본 데이터(`data/`)는 그 파일에서 뺀다. 런타임에 필요한 환경 변수는 없다(DB는 빌드에도 쓰지 않는다).
+`.env`와 원본 데이터(`data/`)는 그 파일에서 뺀다. DB는 빌드에도 런타임에도 쓰지 않는다.
+
+채점 API에는 Vercel 환경 변수 `GEMINI_API_KEY`(선택: `GEMINI_MODEL`)가 필요하다. 없으면 채점만 꺼지고 나머지는 그대로 동작한다.
 
 ## 스키마
 

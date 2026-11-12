@@ -42,6 +42,29 @@ export type DictMeaning = {
 export const DICTIONARY_PATH = '/data/words.json'
 
 /**
+ * 예문 파일. 단어를 펼쳤을 때 처음 한 번만 받는다(단어 목록 파일을 키우지 않으려고 따로 둔다).
+ * data:export 가 DB의 examples·example_translations 로 쓴다. data:local(DB 없음)은 쓰지 않으므로 없을 수 있다.
+ */
+export type ExamplesFile = {
+  source: string
+  generatedAt: string
+  /** 단어 ID(DictWord.id) → 예문. 예문이 있는 단어만 담는다. */
+  words: Record<string, DictExample[]>
+}
+
+export type DictExample = {
+  /** 이 예문이 보여주는 뜻. DictWord.senses 안의 위치(0부터). */
+  sense: number
+  ja: string
+  /** 문장 전체의 가나 읽기 */
+  reading?: string
+  /** 화면 언어별 번역 */
+  translations: Partial<Record<Language, string>>
+}
+
+export const EXAMPLES_PATH = '/data/examples.json'
+
+/**
  * 메인 화면(무작위 단어)용 파일. 학습 순서 상위 STUDY_RANGE 단어만 담는다.
  * 전체 파일(수 MB)을 받지 않고 몇십 단어를 보여주기 위해 data:export·data:local 이 따로 쓴다.
  * 화면 언어에 맞는 뜻이 있는 단어만 골라 뽑는 일은 화면이 한다(언어마다 번역 범위가 다르다).

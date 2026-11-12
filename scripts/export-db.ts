@@ -7,7 +7,15 @@ import { asc, inArray } from 'drizzle-orm'
 
 import { db } from '../src/db'
 import { learningOrder } from '../src/db/order'
-import { senses, senseTranslations, words, type Language, type PartOfSpeech } from '../src/db/schema'
+import {
+  examples,
+  exampleTranslations,
+  senses,
+  senseTranslations,
+  words,
+  type Language,
+  type PartOfSpeech,
+} from '../src/db/schema'
 import {
   hasKorean,
   hasMeaningIn,
@@ -16,6 +24,7 @@ import {
   type DictMeaning,
   type DictSense,
   type DictWord,
+  type ExamplesFile,
 } from '../src/lib/dictionary'
 import { isSingleKana, keepSense, resolveWordPos } from './lib/app-filter'
 
@@ -33,6 +42,8 @@ const OUT_DIR = join(process.cwd(), 'public', 'data')
 const OUT_PATH = join(OUT_DIR, 'words.json')
 /** 메인 화면(무작위 단어)용. 학습 순서 상위 STUDY_RANGE 단어만 담는다. 화면 언어별 거르기는 화면이 한다. */
 const STUDY_OUT_PATH = join(OUT_DIR, 'study.json')
+/** 단어를 펼쳤을 때 받는 예문. 예문이 있는 단어만 담는다. */
+const EXAMPLES_OUT_PATH = join(OUT_DIR, 'examples.json')
 const EXPORTED_LANGS: Language[] = ['ko', 'en', 'la']
 
 async function main() {
@@ -76,14 +87,14 @@ async function main() {
 
   // 한 글자 히라가나(の, は, を …)의 조사·어미 뜻은 앱에 싣지 않는다. scripts/lib/app-filter.ts 참고.
   const wordById = new Map(wordRows.map((w) => [w.id, w]))
-  const sensesByWord = new Map<number, Array<{ pos: PartOfSpeech; meanings: DictSense['meanings'] }>>()
+  const sensesByWord = new Map<number, Array<{ id: number; pos: PartOfSpeech; meanings: DictSense['meanings'] }>>()
   for (const s of senseRows) {
     const meanings = meaningsBySense.get(s.id)
     const word = wordById.get(s.wordId)
     if (!meanings || !word) continue
     if (!keepSense(word.lemma, word.pos, { pos: s.pos, koGlosses: meanings.ko?.glosses })) continue
     const list = sensesByWord.get(s.wordId) ?? []
-    list.push({ pos: s.pos ?? word.pos, meanings })
+    list.push({ id: s.id, pos: s.pos ?? word.pos, meanings })
     sensesByWord.set(s.wordId, list)
   }
 
@@ -111,6 +122,40 @@ async function main() {
     words: dictWords,
   }
 
+  // 예문은 뜻(sense_id)에 붙어 있다. 앱의 뜻 목록은 거른 뒤라 DB의 order_no 와 위치가 다를 수 있어서
+  // 앱에 남은 뜻 안에서의 위치로 바꿔 싣는다. 앱에서 빠진 뜻의 예문은 싣지 않는다.
+  const senseSlot = new Map<number, { wordId: number; index: number }>()
+  for (const [wordId, kept] of sensesByWord) kept.forEach((s, index) => senseSlot.set(s.id, { wordId, index }))
+  const exampleRows = await db
+    .select({ id: examples.id, senseId: examples.senseId, ja: examples.ja, reading: examples.reading })
+    .from(examples)
+    .orderBy(asc(examples.senseId), asc(examples.orderNo), asc(examples.id))
+  const exampleTexts = await db
+    .select({ exampleId: exampleTranslations.exampleId, lang: exampleTranslations.lang, text: exampleTranslations.text })
+    .from(exampleTranslations)
+    .where(inArray(exampleTranslations.lang, EXPORTED_LANGS))
+  const textsByExample = new Map<number, Partial<Record<Language, string>>>()
+  for (const t of exampleTexts) {
+    const m = textsByExample.get(t.exampleId) ?? {}
+    m[t.lang] = t.text
+    textsByExample.set(t.exampleId, m)
+  }
+  const examplesOut: ExamplesFile = { source: out.source, generatedAt: out.generatedAt, words: {} }
+  let exampleCount = 0
+  for (const e of exampleRows) {
+    const slot = senseSlot.get(e.senseId)
+    if (!slot) continue
+    const list = (examplesOut.words[slot.wordId] ??= [])
+    list.push({
+      sense: slot.index,
+      ja: e.ja,
+      ...(e.reading && { reading: e.reading }),
+      translations: textsByExample.get(e.id) ?? {},
+    })
+    exampleCount++
+  }
+  for (const list of Object.values(examplesOut.words)) list.sort((a, b) => a.sense - b.sense)
+
   const studyWords = dictWords.slice(0, STUDY_RANGE)
   const studyOut: DictionaryFile = { ...out, words: studyWords }
 
@@ -119,6 +164,8 @@ async function main() {
   writeFileSync(OUT_PATH, json)
   const studyJson = JSON.stringify(studyOut)
   writeFileSync(STUDY_OUT_PATH, studyJson)
+  const examplesJson = JSON.stringify(examplesOut)
+  writeFileSync(EXAMPLES_OUT_PATH, examplesJson)
 
   const mb = (s: string) => `${(Buffer.byteLength(s) / 1024 / 1024).toFixed(1)} MB`
   const allSenses = dictWords.flatMap((w) => w.senses)
@@ -134,6 +181,8 @@ async function main() {
   console.log(
     `  상위 ${studyWords.length.toLocaleString()}단어 (한국어 뜻 있음 ${studyWords.filter(hasKorean).length}개) · ${mb(studyJson)}`,
   )
+  console.log(`${EXAMPLES_OUT_PATH}`)
+  console.log(`  예문 ${exampleCount}개 / 단어 ${Object.keys(examplesOut.words).length}개 · ${mb(examplesJson)}`)
   console.log(`\n한 글자 히라가나 — 조사 뜻뿐이라 뺀 단어 ${removed.length}개: ${removed.join(' ')}`)
   console.log(`  조사 뜻만 빼고 남긴 단어 ${trimmed.length}개: ${trimmed.join(' ')}`)
 }
