@@ -43,6 +43,7 @@ const es: Dictionary = {
     more: 'Ver más ({shown} / {total})',
     noKorean: '',
     partialKorean: '',
+    sort: { label: 'Orden', kana: 'Orden あいうえお', frequency: 'Más usadas' },
     filters: {
       all: 'Todas',
       noun: 'Sustantivos',
