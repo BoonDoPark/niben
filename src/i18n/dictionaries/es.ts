@@ -1,0 +1,111 @@
+import type { Dictionary } from './ko'
+
+/** 스페인어 화면 문구(중남미 사용자 기준). 품사 이름의 godan·ichidan 은 일본어 문법 용어를 그대로 쓴다. */
+const es: Dictionary = {
+  meta: {
+    title: 'niben — Vocabulario japonés',
+    description: 'Aprende palabras japonesas en el orden en que más se usan',
+    wordsTitle: 'Todas las palabras',
+  },
+  header: {
+    tagline: 'Aprende palabras japonesas en el orden en que más se usan',
+  },
+  nav: {
+    label: 'Cambiar vista',
+    random: '50 al azar',
+    words: 'Todas las palabras',
+    language: 'Idioma',
+  },
+  footer: {
+    dictionary: 'Datos del diccionario',
+    frequency: 'Datos de frecuencia',
+    frequencyList: 'lista de frecuencia de todos los medios',
+  },
+  status: {
+    loading: 'Cargando el diccionario…',
+    loadFailed: 'No se pudo cargar el diccionario ({status})',
+    missingStudy:
+      'Faltan los datos de palabras (public/data/study.json). Ejecuta primero npm run data:export o npm run data:local.',
+    missingWords:
+      'Faltan los datos de palabras (public/data/words.json). Ejecuta primero npm run data:export o npm run data:local.',
+  },
+  random: {
+    summary: '{count} palabras elegidas al azar entre las {total} más usadas.',
+    redraw: 'Elegir otras',
+    empty: 'Todavía no hay palabras con significado en español. Puedes verlas en otros idiomas en "Todas las palabras".',
+  },
+  words: {
+    searchLabel: 'Buscar palabras',
+    searchPlaceholder: 'Busca en japonés, lectura o significado',
+    count: '{n} palabras',
+    ofTotal: ' / {total} en total',
+    notFound: 'No se encontraron palabras.',
+    more: 'Ver más ({shown} / {total})',
+    noKorean: '',
+    partialKorean: '',
+    filters: {
+      all: 'Todas',
+      noun: 'Sustantivos',
+      verb: 'Verbos',
+      adj: 'Adjetivos',
+      adverb: 'Adverbios',
+      other: 'Otras',
+    },
+  },
+  word: {
+    freq: 'Top {n}',
+  },
+  study: {
+    open: 'Ejemplos y práctica',
+    back: 'Volver',
+    notFound: 'Esta palabra no está disponible aquí.',
+    examples: 'Ejemplos',
+    noExamples: 'Esta palabra todavía no tiene ejemplos. Igual puedes practicar escribiendo.',
+    loadingExamples: 'Cargando ejemplos…',
+    examplesFailed: 'No se pudieron cargar los ejemplos.',
+    senseLabel: 'Significado {n}',
+    showMeaning: 'Ver traducción',
+    hideMeaning: 'Ocultar traducción',
+    translateLabel: 'Traduce esta oración',
+    translatePlaceholder: 'Escribe el significado en español',
+    composeTitle: 'Escribe una oración',
+    composeLabel: 'Escribe una oración en japonés con 「{word}」',
+    composePlaceholder: 'Escribe en japonés',
+    check: 'Revisar',
+    checking: 'Revisando…',
+    correct: 'Correcto',
+    incorrect: 'Casi',
+    betterTranslation: 'Traducción modelo',
+    suggestion: 'Oración corregida',
+    poweredBy: 'Revisado por Gemini (puede equivocarse)',
+    errors: {
+      rate_limited: 'Demasiadas solicitudes. Inténtalo de nuevo en un momento.',
+      busy: 'El corrector está ocupado. Inténtalo de nuevo en un momento.',
+      quota: 'Se alcanzó el límite de revisiones. Inténtalo más tarde.',
+      not_configured: 'La revisión no está disponible ahora.',
+      failed: 'No se pudo revisar tu respuesta. Inténtalo de nuevo en un momento.',
+    },
+  },
+  pos: {
+    noun: 'sustantivo',
+    pronoun: 'pronombre',
+    verb_godan: 'verbo godan',
+    verb_ichidan: 'verbo ichidan',
+    verb_irregular: 'verbo irregular',
+    adj_i: 'adjetivo -i',
+    adj_na: 'adjetivo -na',
+    adverb: 'adverbio',
+    adnominal: 'adnominal',
+    conjunction: 'conjunción',
+    particle: 'partícula',
+    auxiliary: 'auxiliar',
+    interjection: 'interjección',
+    prefix: 'prefijo',
+    suffix: 'sufijo',
+    counter: 'contador',
+    expression: 'expresión',
+    other: 'otro',
+  },
+}
+
+export default es

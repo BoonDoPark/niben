@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 내려받은 원본 데이터와 번역 작업 파일(git 제외 폴더)
+    "data/**",
   ]),
 ]);
 

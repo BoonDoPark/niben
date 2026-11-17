@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 
+import { WordBrowser } from '@/components/word-browser'
 import { ErrorMessage, LoadingMessage, WordRow, type WordRowText } from '@/components/word-row'
 import { format, numberLocale } from '@/i18n/config'
 import type { Dictionary } from '@/i18n/dictionaries/ko'
@@ -58,31 +59,33 @@ export default function RandomWords({ text }: { text: RandomWordsText }) {
   }
 
   return (
-    <section>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
-          {format(text.random.summary, {
-            total: pool.length.toLocaleString(locale),
-            count: picked.length.toLocaleString(locale),
-          })}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setRedrawn(sample(pool, SAMPLE_SIZE))
-            window.scrollTo({ top: 0, behavior: 'smooth' })
-          }}
-          className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
-          {text.random.redraw}
-        </button>
-      </div>
+    <WordBrowser words={pool} text={text.row}>
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-zinc-500">
+            {format(text.random.summary, {
+              total: pool.length.toLocaleString(locale),
+              count: picked.length.toLocaleString(locale),
+            })}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setRedrawn(sample(pool, SAMPLE_SIZE))
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            {text.random.redraw}
+          </button>
+        </div>
 
-      <ol className="mt-2 divide-y divide-zinc-200 dark:divide-zinc-800">
-        {picked.map((w) => (
-          <WordRow key={w.id} word={w} text={text.row} />
-        ))}
-      </ol>
-    </section>
+        <ol className="mt-2 divide-y divide-zinc-200 dark:divide-zinc-800">
+          {picked.map((w) => (
+            <WordRow key={w.id} word={w} text={text.row} />
+          ))}
+        </ol>
+      </section>
+    </WordBrowser>
   )
 }

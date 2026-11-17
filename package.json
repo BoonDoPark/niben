@@ -17,7 +17,8 @@
     "data:usage": "tsx scripts/import-usage-rank.ts",
     "data:local": "tsx scripts/export-local.ts",
     "data:export": "tsx scripts/export-db.ts",
-    "translate": "tsx scripts/translate.ts"
+    "translate": "tsx scripts/translate.ts",
+    "examples": "tsx scripts/examples.ts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",

@@ -12,7 +12,7 @@ import type { Dictionary } from './ko'
 const dictionaries: Record<Locale, () => Promise<Dictionary>> = {
   ko: () => import('./ko').then((m) => m.default),
   en: () => import('./en').then((m) => m.default),
-  la: () => import('./la').then((m) => m.default),
+  es: () => import('./es').then((m) => m.default),
 }
 
 export function getDictionary(locale: Locale): Promise<Dictionary> {
@@ -23,5 +23,5 @@ export type { Dictionary }
 
 /** 단어 한 줄(WordRow)에 넘길 화면 언어 정보. 두 페이지가 같은 것을 쓴다. */
 export function toWordRowText(locale: Locale, dict: Dictionary): WordRowText {
-  return { locale, meaningLanguages: MEANING_LANGUAGES[locale], pos: dict.pos, freq: dict.word.freq }
+  return { locale, meaningLanguages: MEANING_LANGUAGES[locale], pos: dict.pos, freq: dict.word.freq, study: dict.study }
 }

@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useMemo, useState } from 'react'
 
+import { WordBrowser } from '@/components/word-browser'
 import { ErrorMessage, LoadingMessage, WordRow, type WordRowText } from '@/components/word-row'
 import type { PartOfSpeech } from '@/db/schema'
 import { format, numberLocale } from '@/i18n/config'
@@ -124,73 +125,75 @@ export default function WordList({ text }: { text: WordListText }) {
   ]
 
   return (
-    <section>
-      {showsKorean && state.koWords < state.words.length && (
-        <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          {state.koWords === 0 ? t.noKorean : format(t.partialKorean, { n: num(state.koWords) })}
-        </p>
-      )}
+    <WordBrowser words={state.data.words} text={text.row}>
+      <section>
+        {showsKorean && state.koWords < state.words.length && (
+          <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            {state.koWords === 0 ? t.noKorean : format(t.partialKorean, { n: num(state.koWords) })}
+          </p>
+        )}
 
-      <div className="sticky top-0 z-10 -mx-4 bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <label htmlFor="word-search" className="sr-only">
-          {t.searchLabel}
-        </label>
-        <input
-          id="word-search"
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setVisible(PAGE_SIZE)
-          }}
-          placeholder={t.searchPlaceholder}
-          autoComplete="off"
-          className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
-        />
-        <div className="mt-3 flex flex-wrap gap-2">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              aria-pressed={posFilter === f.key}
-              onClick={() => {
-                setPosFilter(f.key)
-                setVisible(PAGE_SIZE)
-              }}
-              className="rounded-full border border-zinc-300 px-3 py-1 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 aria-pressed:border-zinc-900 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:border-zinc-100 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900"
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="sticky top-0 z-10 -mx-4 bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          <label htmlFor="word-search" className="sr-only">
+            {t.searchLabel}
+          </label>
+          <input
+            id="word-search"
+            type="search"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setVisible(PAGE_SIZE)
+            }}
+            placeholder={t.searchPlaceholder}
+            autoComplete="off"
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={posFilter === f.key}
+                onClick={() => {
+                  setPosFilter(f.key)
+                  setVisible(PAGE_SIZE)
+                }}
+                className="rounded-full border border-zinc-300 px-3 py-1 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 aria-pressed:border-zinc-900 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:border-zinc-100 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <p className="mt-4 mb-2 text-sm text-zinc-500">
-        {format(t.count, { n: num(results.length) })}
-        {results.length !== state.words.length && format(t.ofTotal, { total: num(state.words.length) })}
-      </p>
+        <p className="mt-4 mb-2 text-sm text-zinc-500">
+          {format(t.count, { n: num(results.length) })}
+          {results.length !== state.words.length && format(t.ofTotal, { total: num(state.words.length) })}
+        </p>
 
-      {results.length === 0 ? (
-        <p className="py-16 text-center text-zinc-500">{t.notFound}</p>
-      ) : (
-        <ol className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {results.slice(0, visible).map((w) => (
-            <WordRow key={w.id} word={w} order={w.order} text={text.row} />
-          ))}
-        </ol>
-      )}
+        {results.length === 0 ? (
+          <p className="py-16 text-center text-zinc-500">{t.notFound}</p>
+        ) : (
+          <ol className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {results.slice(0, visible).map((w) => (
+              <WordRow key={w.id} word={w} order={w.order} text={text.row} />
+            ))}
+          </ol>
+        )}
 
-      {visible < results.length && (
-        <button
-          type="button"
-          onClick={() => setVisible((v) => v + PAGE_SIZE)}
-          className="mt-6 w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          {format(t.more, { shown: num(Math.min(visible, results.length)), total: num(results.length) })}
-        </button>
-      )}
+        {visible < results.length && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + PAGE_SIZE)}
+            className="mt-6 w-full rounded-xl border border-zinc-300 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            {format(t.more, { shown: num(Math.min(visible, results.length)), total: num(results.length) })}
+          </button>
+        )}
 
-      <p className="mt-6 text-xs text-zinc-400">{state.data.source}</p>
-    </section>
+        <p className="mt-6 text-xs text-zinc-400">{state.data.source}</p>
+      </section>
+    </WordBrowser>
   )
 }

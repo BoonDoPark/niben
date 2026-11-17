@@ -62,6 +62,7 @@ export const languageLabels: Record<Language, string> = {
   en: 'English',
   ja: '日本語',
   la: 'Latina',
+  es: 'Español',
 }
 
 export const dataSourceLabels: Record<DataSource, string> = {
