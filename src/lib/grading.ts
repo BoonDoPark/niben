@@ -71,7 +71,7 @@ delete resultJsonSchema.$schema
 const FEEDBACK_LANGUAGE: Record<Locale, string> = {
   ko: '한국어',
   en: '영어(English)',
-  la: '라틴어(고전 철자, 장음 기호 없음)',
+  es: '스페인어(중남미에서 쓰는 자연스러운 말)',
 }
 
 function systemPrompt(mode: CheckRequest['mode'], locale: Locale): string {

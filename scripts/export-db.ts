@@ -44,7 +44,7 @@ const OUT_PATH = join(OUT_DIR, 'words.json')
 const STUDY_OUT_PATH = join(OUT_DIR, 'study.json')
 /** 단어를 펼쳤을 때 받는 예문. 예문이 있는 단어만 담는다. */
 const EXAMPLES_OUT_PATH = join(OUT_DIR, 'examples.json')
-const EXPORTED_LANGS: Language[] = ['ko', 'en', 'la']
+const EXPORTED_LANGS: Language[] = ['ko', 'en', 'es']
 
 async function main() {
   console.log('DB에서 읽는 중...')
@@ -174,7 +174,7 @@ async function main() {
   console.log(`  ${dictWords.length}개 단어 / ${allSenses.length}개 뜻`)
   console.log(`  한국어 뜻: ${dictWords.filter(hasKorean).length}개 단어 / ${koSenses}개 뜻`)
   console.log(
-    `  라틴어 뜻: ${dictWords.filter((w) => hasMeaningIn(w, 'la')).length}개 단어 / ${allSenses.filter((s) => s.meanings.la).length}개 뜻`,
+    `  스페인어 뜻: ${dictWords.filter((w) => hasMeaningIn(w, 'es')).length}개 단어 / ${allSenses.filter((s) => s.meanings.es).length}개 뜻`,
   )
   console.log(`  ${mb(json)}`)
   console.log(`${STUDY_OUT_PATH}`)

@@ -3,7 +3,7 @@ import 'dotenv/config'
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { asc, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { db } from '../src/db'
@@ -15,18 +15,23 @@ import { keepSense } from './lib/app-filter'
 
 /**
  * 예문 만들기. 앱에 나오는 학습 순서 상위 STUDY_RANGE 단어의 앞쪽 뜻(최대 SENSES_PER_WORD개)마다 예문을 하나씩 둔다.
- * 예문마다 일본어 원문·가나 읽기와 화면 언어(ko, en, la) 번역을 함께 만든다.
+ * 예문마다 일본어 원문·가나 읽기와 화면 언어(ko, en, es) 번역을 함께 만든다.
  *
  * 번역(translate.ts)과 같은 흐름이다. 요청을 파일로 뽑고(--dump), 다른 도구에서 쓴 결과를 넣는다(--load).
  * 이미 예문이 있는 뜻은 뽑지도 넣지도 않으므로 몇 번이든 다시 돌릴 수 있다.
  *
  *   npm run examples -- --dump <디렉터리> [--batch 25]
  *   npm run examples -- --load <디렉터리 또는 파일>
+ *
+ * 이미 있는 예문에 번역 언어 하나를 더할 때(예: 화면 언어를 새로 추가했을 때):
+ *   npm run examples -- --translate-dump <디렉터리> --lang es   그 언어 번역이 없는 예문을 뽑기
+ *   npm run examples -- --translate-load <디렉터리> --lang es   batch-NNN.json 의 번역을 넣기
  */
 
 const SENSES_PER_WORD = 2
 const DEFAULT_WORDS_PER_BATCH = 25
-const EXAMPLE_LANGS = ['ko', 'en', 'la'] as const
+const EXAMPLE_LANGS = ['ko', 'en', 'es'] as const
+type ExampleLang = (typeof EXAMPLE_LANGS)[number]
 
 export const EXAMPLE_PROMPT = `당신은 일본어 단어장의 예문 작가다. 표제어마다 [senseId]가 붙은 뜻에 예문을 하나씩 쓴다.
 "-"로 시작하는 줄은 같은 단어의 다른 뜻이다. 예문이 그 뜻과 헷갈리지 않게 하는 데만 참고한다.
@@ -45,18 +50,17 @@ export const EXAMPLE_PROMPT = `당신은 일본어 단어장의 예문 작가다
 
 문장 전체를 가나로 쓴다. 한자는 히라가나로 바꾸고, 가타카나 낱말은 가타카나 그대로 둔다. 문장부호는 그대로, 띄어쓰기는 하지 않는다.
 
-## 번역(ko, en, la)
+## 번역(ko, en, es)
 
 - 예문 전체를 자연스럽게 옮긴다. 표제어 부분은 줄에 적힌 그 언어의 뜻과 맞춘다.
 - ko: 자연스러운 한국어 문장.
 - en: 자연스러운 영어 문장.
-- la: 고전 라틴어 철자로 쓴다. 장음 기호(ā)·합자(æ)는 쓰지 않고, 자음 u는 v로 쓰고, 라틴어 낱말에는 j를 쓰지 않는다(iam).
-  현대 문물은 줄에 적힌 라틴어 뜻과 같은 신라틴어를 쓴다. 일본 이름은 로마자로 쓴다(Tanaka).
+- es: 중남미에서 쓰는 자연스러운 스페인어 문장(computadora, celular 등). 강세 부호를 바르게 쓴다.
 
 ## 출력
 
 [senseId]가 있는 뜻마다 하나씩, 하나도 빠뜨리지 않는다.
-{"examples":[{"senseId":123,"ja":"…","reading":"…","ko":"…","en":"…","la":"…"}]}`
+{"examples":[{"senseId":123,"ja":"…","reading":"…","ko":"…","en":"…","es":"…"}]}`
 
 export const ExampleBatchSchema = z.object({
   examples: z.array(
@@ -66,23 +70,45 @@ export const ExampleBatchSchema = z.object({
       reading: z.string().min(1),
       ko: z.string().min(1),
       en: z.string().min(1),
-      la: z.string().min(1),
+      es: z.string().min(1),
     }),
   ),
 })
 
-type Options = { dump: string | null; load: string | null; wordsPerBatch: number }
+type Options = {
+  dump: string | null
+  load: string | null
+  translateDump: string | null
+  translateLoad: string | null
+  lang: ExampleLang
+  wordsPerBatch: number
+}
 
 function parseArgs(argv: string[]): Options {
-  const opts: Options = { dump: null, load: null, wordsPerBatch: DEFAULT_WORDS_PER_BATCH }
+  const opts: Options = {
+    dump: null,
+    load: null,
+    translateDump: null,
+    translateLoad: null,
+    lang: 'es',
+    wordsPerBatch: DEFAULT_WORDS_PER_BATCH,
+  }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--dump') opts.dump = argv[++i]
     else if (arg === '--load') opts.load = argv[++i]
     else if (arg === '--batch') opts.wordsPerBatch = Number(argv[++i])
+    else if (arg === '--translate-dump') opts.translateDump = argv[++i]
+    else if (arg === '--translate-load') opts.translateLoad = argv[++i]
+    else if (arg === '--lang') {
+      const lang = argv[++i]
+      if (!(EXAMPLE_LANGS as readonly string[]).includes(lang)) throw new Error(`--lang 은 ${EXAMPLE_LANGS.join(' | ')} 중 하나입니다`)
+      opts.lang = lang as ExampleLang
+    }
     else throw new Error(`알 수 없는 인자: ${arg}`)
   }
-  if (!opts.dump === !opts.load) throw new Error('--dump 또는 --load 중 하나를 넘기세요')
+  const modes = [opts.dump, opts.load, opts.translateDump, opts.translateLoad].filter(Boolean)
+  if (modes.length !== 1) throw new Error('--dump, --load, --translate-dump, --translate-load 중 하나를 넘기세요')
   return opts
 }
 
@@ -90,7 +116,7 @@ type TargetWord = {
   lemma: string
   reading: string
   posLabel: string
-  senses: Array<{ id: number; target: boolean; meanings: Partial<Record<'ko' | 'en' | 'la', string>> }>
+  senses: Array<{ id: number; target: boolean; meanings: Partial<Record<ExampleLang, string>> }>
 }
 
 /**
@@ -114,10 +140,10 @@ async function findTargets(): Promise<TargetWord[]> {
     (await db.selectDistinct({ senseId: examples.senseId }).from(examples)).map((r) => r.senseId),
   )
 
-  const glosses = new Map<number, Partial<Record<'ko' | 'en' | 'la', string[]>>>()
+  const glosses = new Map<number, Partial<Record<ExampleLang, string[]>>>()
   for (const g of glossRows) {
     const m = glosses.get(g.senseId) ?? {}
-    m[g.lang as 'ko' | 'en' | 'la'] = g.glosses
+    m[g.lang as ExampleLang] = g.glosses
     glosses.set(g.senseId, m)
   }
   const sensesByWord = new Map<number, typeof senseRows>()
@@ -144,7 +170,7 @@ async function findTargets(): Promise<TargetWord[]> {
         meanings: {
           ko: g.ko?.join(', '),
           en: g.en?.join('; '),
-          la: g.la?.join(', '),
+          es: g.es?.join(', '),
         },
       }
     })
@@ -157,7 +183,7 @@ async function findTargets(): Promise<TargetWord[]> {
 function formatWord(w: TargetWord): string {
   const title = w.lemma === w.reading ? `### ${w.lemma} · ${w.posLabel}` : `### ${w.lemma} (${w.reading}) · ${w.posLabel}`
   const lines = w.senses.map((s, i) => {
-    const m = `ko: ${s.meanings.ko ?? '-'} | en: ${s.meanings.en ?? '-'} | la: ${s.meanings.la ?? '-'}`
+    const m = `ko: ${s.meanings.ko ?? '-'} | en: ${s.meanings.en ?? '-'} | es: ${s.meanings.es ?? '-'}`
     return s.target ? `[${s.id}] ${m}` : `- (뜻 ${i + 1}) ${m}`
   })
   return [title, ...lines].join('\n')
@@ -231,10 +257,118 @@ async function load(path: string) {
   if (skipped) console.log(`  DB에 없는 뜻이거나 이미 예문이 있어 건너뜀 ${skipped}개`)
 }
 
+
+const TRANSLATIONS_PER_BATCH = 60
+const LANG_NAMES: Record<ExampleLang, string> = { ko: '한국어', en: '영어', es: '스페인어(중남미)' }
+
+export const ExampleTranslationBatchSchema = z.object({
+  translations: z.array(z.object({ exampleId: z.number().int(), text: z.string().min(1) })),
+})
+
+function translatePrompt(lang: ExampleLang): string {
+  return `당신은 일본어 단어장의 예문 번역가다. [exampleId]가 붙은 일본어 예문을 ${LANG_NAMES[lang]}로 옮긴다.
+줄마다 일본어 원문(ja), 그 예문이 보여주는 표제어와 뜻(word), 이미 있는 한국어(ko)·영어(en) 번역이 있다.
+
+- 일본어 원문을 자연스러운 ${LANG_NAMES[lang]} 문장 하나로 옮긴다. 한국어·영어 번역은 뜻을 확인하는 참고로만 쓰고, 영어 문장을 그대로 옮기지 않는다.
+- 표제어 부분은 word 에 적힌 ${LANG_NAMES[lang]} 뜻과 맞춘다.${lang === 'es' ? `
+- 중남미에서 널리 쓰는 말(computadora, celular, carro/auto, jugo)을 쓰고, 스페인에서만 쓰는 말(ordenador, móvil, coche, zumo)은 피한다.
+- 강세 부호·ñ·¿¡ 를 바르게 쓴다. 일본 이름은 로마자(Tanaka), 지명은 스페인어 이름이 있으면 그것(Tokio, Japón).` : ''}
+- 번역 문장 안에 일본어 문자를 넣지 않는다.
+
+## 출력
+
+[exampleId]마다 하나씩, 하나도 빠뜨리지 않는다.
+{"translations":[{"exampleId":123,"text":"…"}]}`
+}
+
+/** 그 언어 번역이 없는 예문을 묶음 파일로 뽑는다. */
+async function translateDump(dir: string, lang: ExampleLang) {
+  const rows = await db
+    .select({ id: examples.id, senseId: examples.senseId, ja: examples.ja })
+    .from(examples)
+    .orderBy(asc(examples.id))
+  const texts = await db
+    .select({ exampleId: exampleTranslations.exampleId, lang: exampleTranslations.lang, text: exampleTranslations.text })
+    .from(exampleTranslations)
+  const byExample = new Map<number, Partial<Record<string, string>>>()
+  for (const t of texts) byExample.set(t.exampleId, { ...byExample.get(t.exampleId), [t.lang]: t.text })
+  const pending = rows.filter((r) => !byExample.get(r.id)?.[lang])
+  if (pending.length === 0) {
+    console.log(`${LANG_NAMES[lang]} 번역이 없는 예문이 없습니다.`)
+    return
+  }
+  // 예문이 보여주는 표제어와 그 언어 뜻(있으면)을 함께 실어 표제어 번역을 뜻과 맞추게 한다.
+  const senseIds = [...new Set(pending.map((r) => r.senseId))]
+  const senseRows = await db
+    .select({ id: senses.id, lemma: words.lemma })
+    .from(senses)
+    .innerJoin(words, eq(words.id, senses.wordId))
+    .where(inArray(senses.id, senseIds))
+  const lemmaOf = new Map(senseRows.map((r) => [r.id, r.lemma]))
+  const glossRows = await db
+    .select({ senseId: senseTranslations.senseId, lang: senseTranslations.lang, glosses: senseTranslations.glosses })
+    .from(senseTranslations)
+    .where(and(inArray(senseTranslations.senseId, senseIds), inArray(senseTranslations.lang, [lang, 'en'])))
+  const glossOf = new Map<number, Partial<Record<string, string>>>()
+  for (const g of glossRows) glossOf.set(g.senseId, { ...glossOf.get(g.senseId), [g.lang]: g.glosses.join(', ') })
+
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'system-prompt.txt'), translatePrompt(lang))
+  let batchNo = 0
+  for (let i = 0; i < pending.length; i += TRANSLATIONS_PER_BATCH) {
+    const batch = pending.slice(i, i + TRANSLATIONS_PER_BATCH)
+    batchNo++
+    const lines = batch.map((r) => {
+      const t = byExample.get(r.id) ?? {}
+      const g = glossOf.get(r.senseId) ?? {}
+      return `[${r.id}] ja: ${r.ja} | word: ${lemmaOf.get(r.senseId) ?? '-'} = ${g[lang] ?? g.en ?? '-'} | ko: ${t.ko ?? '-'} | en: ${t.en ?? '-'}`
+    })
+    const body = [`아래 예문 ${batch.length}개를 ${LANG_NAMES[lang]}로 옮겨라.`, '', ...lines]
+    writeFileSync(join(dir, `batch-${String(batchNo).padStart(3, '0')}.txt`), body.join('\n'))
+  }
+  console.log(`예문 ${pending.length}개 → ${dir} 에 묶음 ${batchNo}개를 썼습니다.`)
+}
+
+/** 번역 결과를 넣는다. 이미 그 언어 번역이 있는 예문은 건너뛴다. */
+async function translateLoad(path: string, lang: ExampleLang) {
+  const files = statSync(path).isDirectory()
+    ? readdirSync(path)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .map((f) => join(path, f))
+    : [path]
+  const items = files.flatMap(
+    (f) => ExampleTranslationBatchSchema.parse(JSON.parse(readFileSync(f, 'utf8'))).translations,
+  )
+  const ids = [...new Set(items.map((t) => t.exampleId))]
+  const known = new Set(
+    ids.length === 0
+      ? []
+      : (await db.select({ id: examples.id }).from(examples).where(inArray(examples.id, ids))).map((r) => r.id),
+  )
+  const rows = items
+    .filter((t) => known.has(t.exampleId))
+    .map((t) => ({ exampleId: t.exampleId, lang, text: t.text, source: 'llm' as const, verified: false }))
+  let inserted = 0
+  for (let i = 0; i < rows.length; i += 1000) {
+    const res = await db
+      .insert(exampleTranslations)
+      .values(rows.slice(i, i + 1000))
+      .onConflictDoNothing()
+      .returning({ id: exampleTranslations.id })
+    inserted += res.length
+  }
+  console.log(`파일 ${files.length}개에서 번역 ${items.length}개를 읽었습니다.`)
+  console.log(`  ${LANG_NAMES[lang]} 예문 번역 ${inserted}개 삽입`)
+  if (rows.length > inserted) console.log(`  이미 있어 건너뜀 ${rows.length - inserted}개`)
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
   if (opts.dump) await dump(opts.dump, opts.wordsPerBatch)
   if (opts.load) await load(opts.load)
+  if (opts.translateDump) await translateDump(opts.translateDump, opts.lang)
+  if (opts.translateLoad) await translateLoad(opts.translateLoad, opts.lang)
 }
 
 main()

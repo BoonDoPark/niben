@@ -37,7 +37,7 @@ import {
  * 사용:
  *   npm run translate -- --limit 100 --dry-run   프롬프트만 출력 (API 호출 없음)
  *   npm run translate -- --limit 2000            상위 2000 표제어 번역
- *   npm run translate -- --lang la --dry-run     라틴어 (ko | la)
+ *   npm run translate -- --lang es --dry-run     스페인어 (ko | es)
  *
  * API 없이 (다른 도구에서 직접 번역):
  *   npm run translate -- --limit 100 --batch 50 --dump <디렉터리>   요청 본문을 파일로 뽑기
