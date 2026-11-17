@@ -48,12 +48,13 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     >
       <body className="min-h-full flex flex-col font-sans">
         <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
-          <header className="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">niben</h1>
-              <p className="mt-2 text-zinc-600 dark:text-zinc-400">{dict.header.tagline}</p>
+          {/* 언어 선택은 휴대폰에서도 줄바꿈 없이 오른쪽 위에 둔다(누르면 목록이 펼쳐진다). */}
+          <header className="mb-6">
+            <div className="flex items-center justify-between gap-4">
+              <h1 className="shrink-0 text-3xl font-bold tracking-tight">niben</h1>
+              <LanguageSwitcher locale={lang} label={dict.nav.language} />
             </div>
-            <LanguageSwitcher locale={lang} label={dict.nav.language} />
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">{dict.header.tagline}</p>
           </header>
 
           <NavTabs

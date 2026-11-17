@@ -36,6 +36,24 @@ function matchesPos(pos: PartOfSpeech, filter: PosFilter): boolean {
   return POS_GROUPS.find((g) => g.key === filter)!.pos.some((p) => p === pos)
 }
 
+/**
+ * 목록 정렬. kana: 읽기의 あいうえお 순(기본), frequency: 학습 순서(많이 쓰는 순, words.json 순서 그대로).
+ */
+type SortOrder = 'kana' | 'frequency'
+
+/**
+ * 읽기를 오십음도 순으로 비교한다. 읽기는 히라가나로 맞춘 것(readingKey)을 쓰고,
+ * Intl의 일본어 정렬이 か·が처럼 탁음을 바로 뒤에 둔다. 읽기가 같으면 표기, 그다음 학습 순서.
+ */
+const kanaCollator = new Intl.Collator('ja')
+function compareKana(a: IndexedWord, b: IndexedWord): number {
+  return (
+    kanaCollator.compare(a.readingKey, b.readingKey) ||
+    kanaCollator.compare(a.lemma, b.lemma) ||
+    a.order - b.order
+  )
+}
+
 /** 학습 순서(전체 목록에서의 위치)와 정규화한 검색용 문자열을 미리 붙여 둔다. */
 type IndexedWord = DictWord & {
   order: number
@@ -60,6 +78,7 @@ function indexWord(word: DictWord, i: number): IndexedWord {
 }
 
 function search(words: IndexedWord[], rawQuery: string, posFilter: PosFilter): IndexedWord[] {
+  // words 가 이미 고른 순서로 정렬돼 있으므로 거르기만 하면 그 순서가 유지된다.
   const byPos = words.filter((w) => matchesPos(w.pos, posFilter))
   const q = normalizeForSearch(rawQuery.trim())
   if (q === '') return byPos
@@ -72,7 +91,7 @@ function search(words: IndexedWord[], rawQuery: string, posFilter: PosFilter): I
   )
 
   // 표기·읽기가 똑같거나 뜻이 검색어 그대로("eat", "to eat")인 단어를 앞으로 올린다.
-  // 나머지는 학습 순서를 지킨다.
+  // 나머지는 고른 정렬 순서를 지킨다.
   const isExact = (w: IndexedWord) =>
     w.lemmaKey === q ||
     w.readingKey === q ||
@@ -88,24 +107,36 @@ export type WordListText = {
   errors: { missing: string; loadFailed: string }
 }
 
-type Loaded = { data: DictionaryFile; words: IndexedWord[]; koWords: number }
+type Loaded = {
+  data: DictionaryFile
+  /** 정렬 순서별 목록. 2만 개 정렬은 한 번만 하려고 불러올 때 미리 만든다. */
+  sorted: Record<SortOrder, IndexedWord[]>
+  koWords: number
+}
 
 function prepare(data: DictionaryFile): Loaded {
-  return { data, words: data.words.map(indexWord), koWords: data.words.filter(hasKorean).length }
+  const frequency = data.words.map(indexWord)
+  return {
+    data,
+    sorted: { frequency, kana: [...frequency].sort(compareKana) },
+    koWords: data.words.filter(hasKorean).length,
+  }
 }
 
 export default function WordList({ text }: { text: WordListText }) {
   const loaded = useDictionary(DICTIONARY_PATH, text.errors, prepare)
   const [query, setQuery] = useState('')
   const [posFilter, setPosFilter] = useState<PosFilter>('all')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('kana')
   const [visible, setVisible] = useState(PAGE_SIZE)
 
   // 2만 개를 매 타자마다 거르면 입력이 버벅일 수 있어 검색어 반영을 뒤로 미룬다.
   const deferredQuery = useDeferredValue(query)
 
   const results = useMemo(
-    () => (loaded.status === 'ready' ? search(loaded.value.words, deferredQuery, posFilter) : []),
-    [loaded, deferredQuery, posFilter],
+    () =>
+      loaded.status === 'ready' ? search(loaded.value.sorted[sortOrder], deferredQuery, posFilter) : [],
+    [loaded, deferredQuery, posFilter, sortOrder],
   )
 
   if (loaded.status === 'loading') return <LoadingMessage text={text.loading} />
@@ -124,10 +155,15 @@ export default function WordList({ text }: { text: WordListText }) {
     { key: 'other', label: t.filters.other },
   ]
 
+  const sorts: Array<{ key: SortOrder; label: string }> = [
+    { key: 'kana', label: t.sort.kana },
+    { key: 'frequency', label: t.sort.frequency },
+  ]
+
   return (
     <WordBrowser words={state.data.words} text={text.row}>
       <section>
-        {showsKorean && state.koWords < state.words.length && (
+        {showsKorean && state.koWords < state.data.words.length && (
           <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
             {state.koWords === 0 ? t.noKorean : format(t.partialKorean, { n: num(state.koWords) })}
           </p>
@@ -165,11 +201,28 @@ export default function WordList({ text }: { text: WordListText }) {
               </button>
             ))}
           </div>
+          <div role="group" aria-label={t.sort.label} className="mt-3 flex items-center gap-1 text-sm">
+            <span className="mr-1 text-zinc-500">{t.sort.label}</span>
+            {sorts.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                aria-pressed={sortOrder === o.key}
+                onClick={() => {
+                  setSortOrder(o.key)
+                  setVisible(PAGE_SIZE)
+                }}
+                className="rounded-full px-2.5 py-1 text-zinc-500 transition-colors hover:text-zinc-900 aria-pressed:bg-zinc-100 aria-pressed:font-medium aria-pressed:text-zinc-900 dark:hover:text-zinc-100 dark:aria-pressed:bg-zinc-800 dark:aria-pressed:text-zinc-100"
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <p className="mt-4 mb-2 text-sm text-zinc-500">
           {format(t.count, { n: num(results.length) })}
-          {results.length !== state.words.length && format(t.ofTotal, { total: num(state.words.length) })}
+          {results.length !== state.data.words.length && format(t.ofTotal, { total: num(state.data.words.length) })}
         </p>
 
         {results.length === 0 ? (
@@ -177,7 +230,13 @@ export default function WordList({ text }: { text: WordListText }) {
         ) : (
           <ol className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {results.slice(0, visible).map((w) => (
-              <WordRow key={w.id} word={w} order={w.order} text={text.row} />
+              <WordRow
+                key={w.id}
+                word={w}
+                // あいうえお 순에서 학습 순서 번호는 뒤죽박죽으로 보여 숨긴다. 빈도는 "빈도 N위 안"으로 따로 보인다.
+                order={sortOrder === 'frequency' ? w.order : undefined}
+                text={text.row}
+              />
             ))}
           </ol>
         )}

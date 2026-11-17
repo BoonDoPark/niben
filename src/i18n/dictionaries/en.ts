@@ -40,6 +40,7 @@ const en: Dictionary = {
     more: 'Show more ({shown} / {total})',
     noKorean: '',
     partialKorean: '',
+    sort: { label: 'Sort', kana: 'あいうえお order', frequency: 'Most used' },
     filters: {
       all: 'All',
       noun: 'Nouns',

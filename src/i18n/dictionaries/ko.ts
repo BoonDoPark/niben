@@ -44,6 +44,7 @@ const ko = {
     more: '더 보기 ({shown} / {total})',
     noKorean: '한국어 뜻은 아직 생성 전이라 JMdict의 영어 뜻을 보여줍니다.',
     partialKorean: '한국어 뜻은 {n}개 단어에만 있습니다. 나머지는 영어 뜻을 보여줍니다.',
+    sort: { label: '정렬', kana: 'あいうえお 순', frequency: '많이 쓰는 순' },
     filters: {
       all: '전체',
       noun: '명사',
