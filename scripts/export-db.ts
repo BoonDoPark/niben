@@ -26,6 +26,7 @@ import {
   type DictWord,
   type ExamplesFile,
 } from '../src/lib/dictionary'
+import { loadJlptLookup } from './lib/jlpt'
 import { isSingleKana, keepSense, resolveWordPos } from './lib/app-filter'
 
 /**
@@ -98,6 +99,7 @@ async function main() {
     sensesByWord.set(s.wordId, list)
   }
 
+  const jlpt = await loadJlptLookup()
   const dictWords: DictWord[] = []
   const removed: string[] = []
   const trimmed: string[] = []
@@ -113,7 +115,8 @@ async function main() {
     }
     // 뜻 품사는 단어 품사와 다를 때만 싣는다(DictSense.pos 규칙).
     const wordSenses: DictSense[] = kept.map((s) => ({ ...(s.pos !== pos && { pos: s.pos }), meanings: s.meanings }))
-    dictWords.push({ ...w, pos, senses: wordSenses })
+    const level = jlpt.find(w.lemma, w.reading)
+    dictWords.push({ ...w, pos, ...(level && { jlpt: level }), senses: wordSenses })
   }
 
   const out: DictionaryFile = {

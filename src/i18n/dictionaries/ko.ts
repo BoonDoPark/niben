@@ -23,6 +23,7 @@ const ko = {
     dictionary: '사전 데이터',
     frequency: '빈도 데이터',
     frequencyList: '전체 매체 빈도 목록',
+    jlpt: 'JLPT 레벨',
   },
   status: {
     loading: '사전 데이터를 불러오는 중…',
@@ -44,6 +45,8 @@ const ko = {
     more: '더 보기 ({shown} / {total})',
     noKorean: '한국어 뜻은 아직 생성 전이라 JMdict의 영어 뜻을 보여줍니다.',
     partialKorean: '한국어 뜻은 {n}개 단어에만 있습니다. 나머지는 영어 뜻을 보여줍니다.',
+    levels: { label: 'JLPT', all: '전체', common: '자주 쓰지만 목록 밖 (상위 {n}위)', none: '레벨 없음', note: 'JLPT 레벨은 비공식 목록(OpenJLPT) 기준입니다. 공식 어휘 목록은 2010년 이후 공개되지 않습니다.' },
+    bands: { label: '빈도', all: '전체', top5k: '상위 5천', top10k: '5천~1만', top20k: '1만~2만', rest: '2만 밖' },
     sort: { label: '정렬', kana: 'あいうえお 순', frequency: '많이 쓰는 순' },
     filters: {
       all: '전체',

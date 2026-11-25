@@ -20,6 +20,7 @@ const es: Dictionary = {
     dictionary: 'Datos del diccionario',
     frequency: 'Datos de frecuencia',
     frequencyList: 'lista de frecuencia de todos los medios',
+    jlpt: 'Niveles JLPT',
   },
   status: {
     loading: 'Cargando el diccionario…',
@@ -43,6 +44,8 @@ const es: Dictionary = {
     more: 'Ver más ({shown} / {total})',
     noKorean: '',
     partialKorean: '',
+    levels: { label: 'JLPT', all: 'Todos', common: 'Comunes, fuera de la lista (top {n})', none: 'Sin nivel', note: 'Los niveles JLPT siguen una lista no oficial (OpenJLPT). No se publica una lista oficial de vocabulario desde 2010.' },
+    bands: { label: 'Frecuencia', all: 'Todas', top5k: 'Top 5 mil', top10k: '5 mil–10 mil', top20k: '10 mil–20 mil', rest: 'Más de 20 mil' },
     sort: { label: 'Orden', kana: 'Orden あいうえお', frequency: 'Más usadas' },
     filters: {
       all: 'Todas',

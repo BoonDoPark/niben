@@ -64,7 +64,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
 
           <main className="mt-6">{children}</main>
 
-          {/* JMdict와 jiten.moe 빈도 목록은 둘 다 CC BY-SA 4.0 — 출처 표기 의무가 있다. */}
+          {/* JMdict·jiten.moe 빈도 목록·OpenJLPT 는 모두 CC BY-SA 4.0 — 출처 표기 의무가 있다. */}
           <footer className="mt-16 space-y-1 border-t border-zinc-200 pt-6 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800">
             <p>
               {dict.footer.dictionary}:{" "}
@@ -88,6 +88,23 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
                 jiten.moe
               </a>{" "}
               {dict.footer.frequencyList},{" "}
+              <a
+                href="https://creativecommons.org/licenses/by-sa/4.0/"
+                className="underline underline-offset-2"
+              >
+                CC BY-SA 4.0
+              </a>
+            </p>
+            <p>
+              {dict.footer.jlpt}:{" "}
+              <a href="https://github.com/evanclan/OpenJLPT" className="underline underline-offset-2">
+                OpenJLPT
+              </a>{" "}
+              (
+              <a href="https://www.tanos.co.uk/jlpt/" className="underline underline-offset-2">
+                Jonathan Waller
+              </a>
+              ),{" "}
               <a
                 href="https://creativecommons.org/licenses/by-sa/4.0/"
                 className="underline underline-offset-2"

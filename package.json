@@ -15,6 +15,7 @@
     "data:import": "tsx scripts/import-jmdict.ts",
     "data:freq": "tsx scripts/import-frequency.ts",
     "data:usage": "tsx scripts/import-usage-rank.ts",
+    "data:jlpt": "tsx scripts/import-jlpt.ts",
     "data:local": "tsx scripts/export-local.ts",
     "data:export": "tsx scripts/export-db.ts",
     "translate": "tsx scripts/translate.ts",
