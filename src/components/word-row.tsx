@@ -95,6 +95,11 @@ export function WordHeading({
       <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
         {text.pos[word.pos]}
       </span>
+      {word.jlpt && (
+        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+          {word.jlpt}
+        </span>
+      )}
       {freq && <span className="text-xs text-zinc-400">{freq}</span>}
       {children}
     </div>

@@ -1,4 +1,4 @@
-import type { Language, PartOfSpeech } from '@/db/schema'
+import type { JlptLevel, Language, PartOfSpeech } from '@/db/schema'
 
 /**
  * 앱이 받는 정적 사전 데이터의 형태.
@@ -21,6 +21,11 @@ export type DictWord = {
   pos: PartOfSpeech
   /** 실사용 빈도 순위(words.usage_rank). scripts/lib/usage-rank.ts 참고. 없으면 null. */
   rank: number | null
+  /**
+   * JLPT 레벨(OpenJLPT, 비공식 — 공식 어휘 목록은 2010년 이후 없다). 목록에 없는 단어는 키 자체가 없다.
+   * scripts/lib/jlpt.ts 참고.
+   */
+  jlpt?: JlptLevel
   senses: DictSense[]
 }
 

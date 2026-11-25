@@ -4,7 +4,8 @@ import { useDeferredValue, useMemo, useState } from 'react'
 
 import { WordBrowser } from '@/components/word-browser'
 import { ErrorMessage, LoadingMessage, WordRow, type WordRowText } from '@/components/word-row'
-import type { PartOfSpeech } from '@/db/schema'
+import { jlptLevelOrder } from '@/db/labels'
+import type { JlptLevel, PartOfSpeech } from '@/db/schema'
 import { format, numberLocale } from '@/i18n/config'
 import type { Dictionary } from '@/i18n/dictionaries/ko'
 import {
@@ -34,6 +35,44 @@ function matchesPos(pos: PartOfSpeech, filter: PosFilter): boolean {
   if (filter === 'all') return true
   if (filter === 'other') return !GROUPED_POS.has(pos)
   return POS_GROUPS.find((g) => g.key === filter)!.pos.some((p) => p === pos)
+}
+
+/**
+ * JLPT 레벨 필터. none 은 레벨 목록(OpenJLPT)에 없는 단어, common 은 그중 자주 쓰이는 단어
+ * (실사용 빈도 COMMON_RANK 위 안)다 — 일상에서 쓰지만 시험 목록에는 없는 말(です, って …).
+ * 레벨을 추정하지 않고 목록에 있느냐·실제 빈도만으로 나눈다(추정은 정확도가 44%라 쓰지 않았다).
+ */
+type LevelFilter = 'all' | 'none' | 'common' | JlptLevel
+
+const COMMON_RANK = 5000
+
+function isCommonUnlisted(w: DictWord): boolean {
+  return w.jlpt === undefined && w.rank !== null && w.rank <= COMMON_RANK
+}
+
+function matchesLevel(w: DictWord, filter: LevelFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'none') return w.jlpt === undefined
+  if (filter === 'common') return isCommonUnlisted(w)
+  return w.jlpt === filter
+}
+
+/** 실사용 빈도 구간 필터. 순위는 측정값이라 레벨과 달리 추정이 아니다. */
+const FREQ_BANDS = [
+  { key: 'top5k', from: 0, to: 5000 },
+  { key: 'top10k', from: 5000, to: 10000 },
+  { key: 'top20k', from: 10000, to: 20000 },
+  { key: 'rest', from: 20000, to: Infinity },
+] as const
+
+type FreqBandFilter = 'all' | (typeof FREQ_BANDS)[number]['key']
+
+function matchesBand(rank: number | null, filter: FreqBandFilter): boolean {
+  if (filter === 'all') return true
+  const band = FREQ_BANDS.find((b) => b.key === filter)!
+  // 순위가 없는 단어는 가장 바깥 구간이다.
+  const r = rank ?? Infinity
+  return r > band.from && r <= band.to
 }
 
 /**
@@ -77,9 +116,15 @@ function indexWord(word: DictWord, i: number): IndexedWord {
   }
 }
 
-function search(words: IndexedWord[], rawQuery: string, posFilter: PosFilter): IndexedWord[] {
+function search(
+  words: IndexedWord[],
+  rawQuery: string,
+  posFilter: PosFilter,
+  levelFilter: LevelFilter,
+  bandFilter: FreqBandFilter,
+): IndexedWord[] {
   // words 가 이미 고른 순서로 정렬돼 있으므로 거르기만 하면 그 순서가 유지된다.
-  const byPos = words.filter((w) => matchesPos(w.pos, posFilter))
+  const byPos = words.filter((w) => matchesPos(w.pos, posFilter) && matchesLevel(w, levelFilter) && matchesBand(w.rank, bandFilter))
   const q = normalizeForSearch(rawQuery.trim())
   if (q === '') return byPos
 
@@ -112,6 +157,27 @@ type Loaded = {
   /** 정렬 순서별 목록. 2만 개 정렬은 한 번만 하려고 불러올 때 미리 만든다. */
   sorted: Record<SortOrder, IndexedWord[]>
   koWords: number
+  /** 레벨별 단어 수(none 은 레벨 없음). 필터 버튼에 보인다. */
+  levelCounts: Record<JlptLevel | 'none' | 'common', number>
+  bandCounts: Record<FreqBandFilter, number>
+}
+
+function countLevels(words: readonly DictWord[]): Loaded['levelCounts'] {
+  const counts = { N5: 0, N4: 0, N3: 0, N2: 0, N1: 0, none: 0, common: 0 }
+  for (const w of words) {
+    counts[w.jlpt ?? 'none']++
+    if (isCommonUnlisted(w)) counts.common++
+  }
+  return counts
+}
+
+function countBands(words: readonly DictWord[]): Loaded['bandCounts'] {
+  const counts = { all: words.length, top5k: 0, top10k: 0, top20k: 0, rest: 0 }
+  for (const w of words) {
+    const band = FREQ_BANDS.find((b) => matchesBand(w.rank, b.key))
+    if (band) counts[band.key]++
+  }
+  return counts
 }
 
 function prepare(data: DictionaryFile): Loaded {
@@ -120,6 +186,8 @@ function prepare(data: DictionaryFile): Loaded {
     data,
     sorted: { frequency, kana: [...frequency].sort(compareKana) },
     koWords: data.words.filter(hasKorean).length,
+    levelCounts: countLevels(data.words),
+    bandCounts: countBands(data.words),
   }
 }
 
@@ -127,6 +195,8 @@ export default function WordList({ text }: { text: WordListText }) {
   const loaded = useDictionary(DICTIONARY_PATH, text.errors, prepare)
   const [query, setQuery] = useState('')
   const [posFilter, setPosFilter] = useState<PosFilter>('all')
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const [bandFilter, setBandFilter] = useState<FreqBandFilter>('all')
   const [sortOrder, setSortOrder] = useState<SortOrder>('kana')
   const [visible, setVisible] = useState(PAGE_SIZE)
 
@@ -135,8 +205,8 @@ export default function WordList({ text }: { text: WordListText }) {
 
   const results = useMemo(
     () =>
-      loaded.status === 'ready' ? search(loaded.value.sorted[sortOrder], deferredQuery, posFilter) : [],
-    [loaded, deferredQuery, posFilter, sortOrder],
+      loaded.status === 'ready' ? search(loaded.value.sorted[sortOrder], deferredQuery, posFilter, levelFilter, bandFilter) : [],
+    [loaded, deferredQuery, posFilter, levelFilter, bandFilter, sortOrder],
   )
 
   if (loaded.status === 'loading') return <LoadingMessage text={text.loading} />
@@ -153,6 +223,18 @@ export default function WordList({ text }: { text: WordListText }) {
     { key: 'all', label: t.filters.all },
     ...POS_GROUPS.map((g) => ({ key: g.key, label: t.filters[g.key] })),
     { key: 'other', label: t.filters.other },
+  ]
+
+  const levels: Array<{ key: LevelFilter; label: string; count: number }> = [
+    { key: 'all', label: t.levels.all, count: state.data.words.length },
+    ...jlptLevelOrder.map((l) => ({ key: l, label: l, count: state.levelCounts[l] })),
+    { key: 'none', label: t.levels.none, count: state.levelCounts.none },
+    { key: 'common', label: format(t.levels.common, { n: num(COMMON_RANK) }), count: state.levelCounts.common },
+  ]
+
+  const bands: Array<{ key: FreqBandFilter; label: string; count: number }> = [
+    { key: 'all', label: t.bands.all, count: state.bandCounts.all },
+    ...FREQ_BANDS.map((b) => ({ key: b.key, label: t.bands[b.key], count: state.bandCounts[b.key] })),
   ]
 
   const sorts: Array<{ key: SortOrder; label: string }> = [
@@ -198,6 +280,43 @@ export default function WordList({ text }: { text: WordListText }) {
                 className="rounded-full border border-zinc-300 px-3 py-1 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 aria-pressed:border-zinc-900 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:border-zinc-100 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900"
               >
                 {f.label}
+              </button>
+            ))}
+          </div>
+          <div role="group" aria-label={t.levels.label} className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm text-zinc-500">{t.levels.label}</span>
+            {levels.map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                aria-pressed={levelFilter === l.key}
+                onClick={() => {
+                  setLevelFilter(l.key)
+                  setVisible(PAGE_SIZE)
+                }}
+                className="rounded-full border border-zinc-300 px-3 py-1 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 aria-pressed:border-zinc-900 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:border-zinc-100 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900"
+              >
+                {l.label}
+                <span className="ml-1.5 text-xs opacity-60 tabular-nums">{num(l.count)}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">{t.levels.note}</p>
+          <div role="group" aria-label={t.bands.label} className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm text-zinc-500">{t.bands.label}</span>
+            {bands.map((b) => (
+              <button
+                key={b.key}
+                type="button"
+                aria-pressed={bandFilter === b.key}
+                onClick={() => {
+                  setBandFilter(b.key)
+                  setVisible(PAGE_SIZE)
+                }}
+                className="rounded-full border border-zinc-300 px-3 py-1 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 aria-pressed:border-zinc-900 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:border-zinc-100 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900"
+              >
+                {b.label}
+                <span className="ml-1.5 text-xs opacity-60 tabular-nums">{num(b.count)}</span>
               </button>
             ))}
           </div>

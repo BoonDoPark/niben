@@ -12,6 +12,7 @@ import {
   type PreparedEntry,
 } from './lib/jmdict-source'
 import { keepSense, resolveWordPos } from './lib/app-filter'
+import { countByLevel, loadJlptLookup } from './lib/jlpt'
 import { assignUsageRanks, ensureUsageFreqCsv, parseUsageFreqCsv } from './lib/usage-rank'
 
 /**
@@ -79,11 +80,17 @@ async function main() {
     newsRanks.get(e.jmdictSeq) ?? Infinity,
     e.jmdictSeq,
   ]
+  console.log('JLPT 레벨 읽는 중...')
+  const jlpt = await loadJlptLookup()
   const dictWords = merged
     .map((e) => ({ e, key: order(e) }))
     .sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2])
     .map(({ e }) => toDictWord(e, usageRanks.get(e.jmdictSeq) ?? null))
     .filter((w): w is DictWord => w !== null)
+    .map((w) => {
+      const level = jlpt.find(w.lemma, w.reading)
+      return level ? { ...w, jlpt: level } : w
+    })
 
   const out: DictionaryFile = {
     source: `JMdict ${data.dictDate} (jmdict-simplified ${data.version})`,
@@ -99,6 +106,7 @@ async function main() {
   const ranked = dictWords.filter((w) => w.rank !== null).length
   console.log(`\n${OUT_PATH}`)
   console.log(`  ${dictWords.length}개 단어, 순위 있음 ${ranked}개`)
+  console.log(`  JLPT 레벨:`, countByLevel(dictWords.map((w) => w.jlpt)))
   console.log(`  ${(Buffer.byteLength(json) / 1024 / 1024).toFixed(1)} MB`)
   console.log(`${STUDY_OUT_PATH} (상위 ${Math.min(STUDY_RANGE, dictWords.length)}단어)`)
 }
