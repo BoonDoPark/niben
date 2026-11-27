@@ -21,6 +21,15 @@ export function useDictionary<T>(
   messages: { missing: string; loadFailed: string },
   select: (data: DictionaryFile) => T,
 ): DictionaryState<T> {
+  return useStaticFile(path, messages, select)
+}
+
+/** useDictionary 와 같지만 사전이 아닌 정적 JSON(한자·문법)도 받을 수 있게 파일 형태를 인자로 둔 것. */
+export function useStaticFile<F, T>(
+  path: string,
+  messages: { missing: string; loadFailed: string },
+  select: (data: F) => T,
+): DictionaryState<T> {
   const { missing, loadFailed } = messages
   const [state, setState] = useState<DictionaryState<T>>({ status: 'loading' })
 
@@ -31,7 +40,7 @@ export function useDictionary<T>(
       .then((res) => {
         if (res.status === 404) throw new Error(missing)
         if (!res.ok) throw new Error(loadFailed.replace('{status}', String(res.status)))
-        return res.json() as Promise<DictionaryFile>
+        return res.json() as Promise<F>
       })
       .then((data) => setState({ status: 'ready', value: select(data) }))
       .catch((err: unknown) => {
