@@ -59,12 +59,18 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
 
           <NavTabs
             locale={lang}
-            labels={{ nav: dict.nav.label, random: dict.nav.random, words: dict.nav.words }}
+            labels={{
+              nav: dict.nav.label,
+              random: dict.nav.random,
+              words: dict.nav.words,
+              kanji: dict.nav.kanji,
+              grammar: dict.nav.grammar,
+            }}
           />
 
           <main className="mt-6">{children}</main>
 
-          {/* JMdict·jiten.moe 빈도 목록·OpenJLPT 는 모두 CC BY-SA 4.0 — 출처 표기 의무가 있다. */}
+          {/* JMdict·KANJIDIC2·jiten.moe 빈도 목록·OpenJLPT 는 모두 CC BY-SA 4.0 — 출처 표기 의무가 있다. */}
           <footer className="mt-16 space-y-1 border-t border-zinc-200 pt-6 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800">
             <p>
               {dict.footer.dictionary}:{" "}
@@ -88,6 +94,19 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
                 jiten.moe
               </a>{" "}
               {dict.footer.frequencyList},{" "}
+              <a
+                href="https://creativecommons.org/licenses/by-sa/4.0/"
+                className="underline underline-offset-2"
+              >
+                CC BY-SA 4.0
+              </a>
+            </p>
+            <p>
+              {dict.footer.kanji}:{" "}
+              <a href="https://www.edrdg.org/wiki/KANJIDIC_Project.html" className="underline underline-offset-2">
+                KANJIDIC2
+              </a>{" "}
+              © EDRDG,{" "}
               <a
                 href="https://creativecommons.org/licenses/by-sa/4.0/"
                 className="underline underline-offset-2"

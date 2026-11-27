@@ -10,15 +10,19 @@ export function NavTabs({
   labels,
 }: {
   locale: Locale
-  labels: { nav: string; random: string; words: string }
+  labels: { nav: string; random: string; words: string; kanji: string; grammar: string }
 }) {
   const pathname = usePathname()
   const home = `/${locale}`
   const words = `/${locale}/words`
+  const kanji = `/${locale}/kanji`
+  const grammar = `/${locale}/grammar`
 
   const tabs = [
     { href: home, label: labels.random, active: pathname === home },
     { href: words, label: labels.words, active: pathname.startsWith(words) },
+    { href: kanji, label: labels.kanji, active: pathname.startsWith(kanji) },
+    { href: grammar, label: labels.grammar, active: pathname.startsWith(grammar) },
   ]
 
   return (
